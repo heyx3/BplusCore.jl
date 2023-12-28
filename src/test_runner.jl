@@ -57,8 +57,7 @@ const TEST_HEADER = quote
     using Random, TupleTools, MacroTools, Setfield, StaticArrays, StructTypes
 
     using BplusCore
-    using BplusCore.Utilities, BplusCore.Math,
-          BplusCore.SceneTree, BplusCore.ECS
+    using BplusCore.Utilities, BplusCore.Math
 
     # Some helpers for iterating over a variety of types:
     const ALL_SIGNED = (Int8, Int16, Int32, Int64, Int128)
