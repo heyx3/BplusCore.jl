@@ -1,0 +1,4 @@
+name = "BplusCore"
+uuid = "1fb136ff-715c-473e-9ae1-0caef0ff09b1"
+authors = ["William Manning <manning.w27@gmail.com>"]
+version = "0.1.0"
