@@ -15,4 +15,5 @@ BplusCore.Math.bp_math_asserts_enabled() = true
 const TEST_HEADER_EXTRA = quote
     using JSON3
 end
-eval(Meta.parseall(BplusCore.TEST_RUNNER_CODE))
+include_string(@__MODULE__, BplusCore.TEST_RUNNER_CODE,
+               joinpath(pathof(BplusCore), "..", "test_runner.jl"))
