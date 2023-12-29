@@ -8,9 +8,13 @@ include("Math/Math.jl")
 export Math
 
 
+# Helper macro to import all BplusCore stuff.
+const MODULES = tuple(:Utilities, :Math)
+const MODULES_USING_STATEMENTS = [:( using BplusCore.$m ) for m in MODULES]
+
 "Imports all Core B+ modules"
 macro using_bplus_core()
-    return :( using BplusCore.Utilities, BplusCore.Math )
+    return quote $(MODULES_USING_STATEMENTS...) end
 end
 export @using_bplus_core
 

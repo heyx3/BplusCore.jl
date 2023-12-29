@@ -147,7 +147,7 @@ for f_path in TEST_FILES
         module_name = Symbol(:UnitTests_, f_name)
         @eval module $module_name
             $TEST_HEADER
-            include($(f_path))
+            include($f_path)
         end
     finally end
 end

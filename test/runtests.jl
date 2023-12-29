@@ -14,6 +14,12 @@ BplusCore.Math.bp_math_asserts_enabled() = true
 # Execute the tests.
 const TEST_HEADER_EXTRA = quote
     using JSON3
+
+    # Sadly, the macros to auto-import B+ do not work right in here.
+    using BplusCore
+    for use in BplusCore.MODULES_USING_STATEMENTS
+        eval(use)
+    end
 end
 include_string(@__MODULE__, BplusCore.TEST_RUNNER_CODE,
                joinpath(pathof(BplusCore), "..", "test_runner.jl"))
