@@ -1,21 +1,20 @@
 # This file contains the test-running code for all B+ package projects.
-# Trying to expose this with normal meta-programming didn't work
-#    due to the amount of interpolated-code-within-interpolated-code.
-# So instead, this file data is meant to be read as a string and 'eval()'-ed.
 
 
 #####################
 ##  Configuration
 
-# You should tell this script where the project folder is.
-if !@isdefined PROJECT_DIR
-    error("You need to configure the unit tests by setting 'PROJECT_DIR'")
+# You can customize where the folder containing tests is located.
+# By default it's the active project's 'test' directory.
+if !@isdefined TEST_DIR
+    using Pkg
+    TEST_DIR = joinpath(Pkg.project().path, "..", "test")
+    println(stderr, "Test directory: ", TEST_DIR)
 end
 
 # You can choose which files to test by passing them as command-line args,
 #    or through a global named 'TEST_NAMES'.
 # The '.jl' extension is automatically appended if necessary.
-const TEST_DIR = joinpath(PROJECT_DIR, "test")
 const TEST_FILES =
     # If desired test files are explicitly given, just run them.
     if @isdefined TEST_NAMES
