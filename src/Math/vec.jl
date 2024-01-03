@@ -591,7 +591,7 @@ Base.last(r::TVecRange) where {TVecRange<:VecRange} = r.b
 Base.step(r::TVecRange) where {TVecRange<:VecRange} = r.step
 
 Base.isempty(r::TVecRange) where {TVecRange<:VecRange} = any(
-    (b < a) for (a,b) in zip(r.a, r.b)
+    isempty(a:step:b) for (a, b, step) in zip(r.a, r.b, r.step)
 )
 
 Base.size(r::TVecRange) where {TVecRange<:VecRange} = tuple(
@@ -601,7 +601,7 @@ Base.length(r::VecRange) = prod(size(r))
 
 # The iteration algorithm is recursive, with a type parameter for the axis being incremented.
 @inline function Base.iterate(r::VecRange)
-    if any(r.a > r.b)
+    if isempty(r)
         return nothing
     else
         return (r.a, r.a)
@@ -611,7 +611,13 @@ end
                                last_pos::Vec{N, T}
                              ) where {N, T}
     p::Vec{N, T} = vec_iterate(r, last_pos, Val(1))
-    return (p[end] > r.b[end]) ? nothing : (p, p)
+    if ((r.step[end] > 0) & (p[end] > r.b[end])) ||
+       ((r.step[end] < 0) & (p[end] < r.b[end]))
+    #begin
+        return nothing
+    else
+        return (p, p)
+    end
 end
 @inline function vec_iterate( r::VecRange{N, T},
                               last_pos::Vec{N, T},
@@ -855,7 +861,7 @@ function vindex(i::Integer, size::Vec{N, <:Integer}) where {N}
 end
 
 "Gets the size of an array as a `Vec`, rather than an `NTuple`."
-vsize(arr::AbstractArray) = Vec(size(arr)...)
+@inline vsize(arr::AbstractArray, I=Int32) = Vec{I}(size(arr)...)
 
 export vselect, vindex, vsize
 

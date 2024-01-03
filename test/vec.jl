@@ -624,6 +624,27 @@ end
 #@bp_test_no_allocations(f(), sum(1:30))
 @bp_check(f() == sum(1:30))
 
+# Test backwards iterations.
+@bp_test_no_allocations(size(v3i(2, 3, 4):v3i(-1, 1, -1):v3i(1, 5, 1)),
+                          (2, 3, 4))
+@bp_test_no_allocations(length(v3i(2, 3, 4):v3i(-1, 1, -1):v3i(1, 5, 1)),
+                          2*3*4)
+@bp_test_no_allocations(isempty(v3i(2, 3, 4):v3i(-1, 1, -1):v3i(1, 5, 1)), false)
+let range = v3i(1, 2, 3):Int32(-1):v3i(1, 1, 1)
+    @bp_check(collect(range) ==
+                [
+                    v3i(1, 2, 3),
+                    v3i(1, 1, 3),
+
+                    v3i(1, 2, 2),
+                    v3i(1, 1, 2),
+
+                    v3i(1, 2, 1),
+                    v3i(1, 1, 1)
+                ],
+             "Range ", range, " yielded ", collect(range))
+end
+
 # Test map!() on a range of coordinates, which invokes several helper functions that I had to overload.
 const MAP_RANGE = 1:v2i(2, 3)
 map_data::Vector{v2i} = fill(zero(v2i), prod(last(MAP_RANGE)))
