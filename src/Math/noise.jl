@@ -3,6 +3,7 @@
 
 "
 Highly customizable, N-dimensional Perlin noise.
+Output range is 0 - 1.
 
 The `seeds` tuple provides extra seed data to the perlin gradient calculation.
 
@@ -12,7 +13,7 @@ Stronger ones require more warm-up time.
 `filter_pos` can be used to implement wrapping or clamping.
 
 `t_curve` can be used to change the smoothness of the noise by taking a linear `t` value
-    and outputting a custom one.
+    and converting it to a smoother one.
 Best results come from a function with first- and second-derivatives of 0 at t=0 and t=1.
 "
 @generated function perlin( v::Vec{N, T},
@@ -28,6 +29,9 @@ Best results come from a function with first- and second-derivatives of 0 at t=0
                             # Smoother interpolants look better.
                             t_curve::TFuncCurve = smootherstep
                           )::T where {N, T, TFuncFilter, TFuncCurve, TPrngStrength, TSeeds<:Tuple}
+    @bp_check(!(T isa Integer),
+              "Provided $T coordinates to perlin(), which will screw up the internal math! ",
+                "Cast to a non-integer type like Float32 instead.")
     @bp_check((N isa Integer) && (N > 0),
               "Perlin noise must be done in a positive-dimensional space, but N == ", N)
     @bp_check(TPrngStrength isa E_PrngStrength,
@@ -150,7 +154,7 @@ Best results come from a function with first- and second-derivatives of 0 at t=0
     #    https://digitalfreepen.com/2017/06/20/range-perlin-noise.html
     #    https://stackoverflow.com/a/18263038
     #    https://www.gamedev.net/forums/topic/285533-2d-perlin-noise-gradient-noise-range--/
-    max_output::T = convert(T, sqrt(N) / 2)
+    max_output::T = convert(T, sqrt(N) / convert(T, 2))
     push!(output.args, quote
         result::T = $final_name
         result = inv_lerp(-$max_output, $max_output, result)

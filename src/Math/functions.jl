@@ -1,6 +1,8 @@
 """
 Linear interpolation: a smooth transition from `a` to `b` based on a `t`.
 `t=0` results in `a`, `t=1.0` results in `b`, `t=0.5` results in the midpoint between them.
+
+You may also pass a bool (or `Vec` of bools) for `t`.
 """
 @inline lerp(a, b, t) = a + (t * (b - a))
 

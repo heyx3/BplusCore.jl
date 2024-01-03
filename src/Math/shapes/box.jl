@@ -194,7 +194,6 @@ end
 
 # Forward keyword arguments to the above constructors.
 @inline Box(; kw...) = Box(namedtuple(keys(kw), values(kw)))
-"If no parameters are given, the box is empty (size 0)"
 @inline Box{N, F}(; kw...) where {N, F} = isempty(kw) ?
                                               Box{N, F}(zero(Vec{N, F}), zero(Vec{N, F})) :
                                               Box{N, F}(namedtuple(kw))

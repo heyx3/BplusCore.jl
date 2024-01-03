@@ -1,4 +1,6 @@
+"Either a `T`, or `nothing`"
 const Optional{T} = Union{T, Nothing}
+"Checks whether an object is not `nothing`"
 @inline exists(x) = !isnothing(x)
 export Optional, exists
 
