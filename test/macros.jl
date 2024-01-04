@@ -100,6 +100,31 @@ let sm = SplitMacro(:( @a(b, c) ))
               "Got: ", string(combinemacro(sm)))
 end
 
+# Test SplitType:
+@bp_check(isnothing(SplitType(:( f() = 5 ))))
+@bp_check(isnothing(SplitType(:( A.B{C} <: D ))),
+          "Qualified names shouldn't be allowed in 'strict' mode")
+let st = SplitType(:A)
+    @bp_check(exists(st))
+    @bp_check(st.name == :A)
+    @bp_check(st.type_params == [])
+    @bp_check(st.parent === nothing)
+    @bp_check(combinetype(st) == :A)
+end
+let st = SplitType(:( A{B, C<:D} <: E() ))
+    @bp_check(exists(st))
+    @bp_check(st.name == :A)
+    @bp_check(st.type_params == [ :B, :(C<:D) ])
+    @bp_check(st.parent == :( E() ))
+    @bp_check(combinetype(st) == :( A{B, C<:D} <: E() ))
+end
+let st = SplitType(:( A.B{23} <: D ), false)
+    @bp_check(exists(st), "Non-strict mode is broken")
+    @bp_check(st.name == :(A.B))
+    @bp_check(st.type_params == [ 23 ])
+    @bp_check(st.parent == :D)
+    @bp_check(combinetype(st) == :( A.B{23} <: D ))
+end
 
 # Test combinecall():
 for (input, expected) in [ (:( f(a) ), :( f(a) )),

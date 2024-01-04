@@ -5,7 +5,7 @@ Pkg.activate(".")
 
 using BplusCore; @using_bplus_core
 
-# Enable asserts for B+ Core.
+# Enable asserts for B+ Core modules.
 BplusCore.Utilities.bp_utils_asserts_enabled() = true
 BplusCore.Math.bp_math_asserts_enabled() = true
 

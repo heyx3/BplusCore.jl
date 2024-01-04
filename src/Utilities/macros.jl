@@ -70,9 +70,24 @@ function_wrapping_is_valid(expr)::Bool = exists(FunctionMetadata(expr))
 export function_wrapping_is_valid
 
 
-"Checks that an expression is a Symbol, possibly nested within `.` operators (for example, `Base.empty`)"
-function is_scopable_name(expr)::Bool
-    return (expr isa Symbol) || (isexpr(expr, :.) && (expr.args[2] isa QuoteNode))
+"
+Checks that an expression is a Symbol, possibly nested within `.` operators.
+For example, `Base.empty`.
+
+Optionally allows 
+"
+function is_scopable_name(expr, allow_type_params::Bool = false)::Bool
+    if isexpr(expr, :curly)
+        if allow_type_params
+            return is_scopable_name(expr.args[1])
+        else
+            return false
+        end
+    elseif expr isa Symbol
+        return true
+    else
+        return isexpr(expr, :.) && (expr.args[2] isa QuoteNode)
+    end
 end
 
 "Gets whether an expression looks like a function call"
@@ -295,6 +310,73 @@ end
 is_macro_invocation(expr) = isexpr(expr, :macrocall)
 
 export SplitMacro, combinemacro, is_macro_invocation
+
+
+##  SplitType  ##
+
+"
+A data representation of a type declaration, such as `C{R, T<:Integer} <: B`.
+The constructor returns `nothing` if the expression isn't a macro invocation.
+
+If you want to skip type checking (such as the name being a Symbol),
+    pass `false` in the constructor.
+
+Turn this struct back into the original expression with `combinetype()`.
+"
+mutable struct SplitType
+    name # Must be a Symbol in 'strict' mode
+    type_params::Vector # Elements must be Symbol or 'T<:expr' in 'strict' mode.
+                        # Usually the expr will be a scoped name, but technically could be any expression.
+    parent::Optional # Usually a scoped name (e.x. 'A' or 'M1.M2.A'),
+                     #    but technically could be any expression.
+
+    function SplitType(expr, strict_mode::Bool = true)
+        local output::SplitType
+        if @capture(expr, n_{t__} <: b_)
+            output = new(n, t, b)
+        elseif @capture(expr, n_{t__})
+            output = new(n, t, b)
+        elseif @capture(expr, n_<:b_)
+            output = new(n, [], b)
+        else
+            output = new(expr, [], nothing)
+        end
+
+        if strict_mode
+            if !isa(output.name, Symbol)
+                return nothing
+            end
+            for tt in output.type_params
+                if !(tt isa Symbol) && (!isexpr(tt, :<:) || !(tt.args[1] isa Symbol))
+                    return nothing
+                end
+            end
+            if !(output.parent isa Union{Nothing, Symbol, Expr})
+                return nothing
+            end
+        end
+
+        return output
+    end
+end
+
+function combinetype(st::SplitType)
+    if isempty(st.type_params)
+        if isnothing(st.parent)
+            return st.name
+        else
+            return :( $(st.name) <: $(st.parent) )
+        end
+    else
+        if isnothing(st.parent)
+            return :( $(st.name){$(st.type_params...)} )
+        else
+            return :( $(st.name){$(st.type_params...)} <: $(st.parent) )
+        end
+    end
+end
+
+export SplitType, combinetype
 
 
 ##  Assignment operators  ##
