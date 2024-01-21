@@ -151,22 +151,41 @@ export expr_deepcopy
 
 ##  SplitArg  ##
 
-"A data represenation of the output of `splitarg()`"
+"
+A data represenation of an argument declaration (a.k.a. the output of `MacroTools.splitarg()`).
+Also handles the whole argument declaration being wrapped in an `esc()`, which `splitarg()` does not.
+"
 mutable struct SplitArg
-    name # Almost always a Symbol, but technically could be other syntax structures
-    type::Optional # Usually a Symbol, or dot expression like `Random.AbstractRNG`,
-                   #    or `nothing` if not given
-    is_splat::Bool
+    name # Almost always a Symbol, but technically could be other syntax structures (like 'esc()').
+    type # Usually a Symbol, or dot expression like `Random.AbstractRNG`.
+         # If no type was given, this is set to ':Any'.
+    is_splat::Bool # Does it end in a '...'?
     default_value::Optional # `nothing` if not given.
-                            # Note that the default value `nothing`
-                            #    is represented here as the Symbol `:nothing`.
+                            # Note that the default value `nothing` will show up here as a Symbol.
+                            # OTOH you interpolated a literal `nothing` into the default value expression,
+                            #    it will get mistaken here for "no default value".
+    is_escaped::Bool # If true, the whole thing was wrapped in an 'esc()'.
 
-    SplitArg(expr) = new(splitarg(expr)...)
+    function SplitArg(expr)
+        if isexpr(expr, :escape)
+            return new(splitarg(expr.args[1])..., true)
+        else
+            return new(splitarg(expr)..., false)
+        end
+    end
     SplitArg(src::SplitArg) = new(expr_deepcopy(src.name), expr_deepcopy(src.type),
-                                  src.is_splat, expr_deepcopy(src.default_value))
+                                  src.is_splat, expr_deepcopy(src.default_value),
+                                  src.is_escaped)
+    SplitArg(name, type, is_splat, default_value, is_escaped) = new(name, type, is_splat, default_value, is_escaped)
 end
 
-MacroTools.combinearg(a::SplitArg) = combinearg(a.name, a.type, a.is_splat, a.default_value)
+MacroTools.combinearg(a::SplitArg) = let inner_expr = combinearg(a.name, a.type, a.is_splat, a.default_value)
+    if a.is_escaped
+        return esc(inner_expr)
+    else
+        return inner_expr
+    end
+end
 
 export SplitArg
 
@@ -174,7 +193,7 @@ export SplitArg
 ##  SplitDef  ##
 
 "
-A data representation of the output of `splitdef()`,
+A data representation of the output of `MacroTools.splitdef()`,
     plus the ability to recognize meta-data like doc-strings and `@inline`.
 
 For convenience, it can also represent function signatures (i.e. calls),
@@ -182,11 +201,11 @@ For convenience, it can also represent function signatures (i.e. calls),
 See `combinecall()` for the opposite.
 "
 mutable struct SplitDef
-    name
+    name::Optional # `nothing` if this is a lambda
     args::Vector{SplitArg}
     kw_args::Vector{SplitArg}
     body
-    return_type
+    return_type::Optional # `nothing` if not given
     where_params::Tuple
     doc_string::Optional{AbstractString}
     inline::Bool
@@ -200,13 +219,13 @@ mutable struct SplitDef
         expr = metadata.core_expr
 
         # If it's just a function call, give it a Nothing body.
-        if !MacroTools.isshortdef(shortdef(expr))
+        if !isexpr(expr, :->) && !MacroTools.isshortdef(shortdef(expr))
             expr = :( $expr = $nothing )
         end
 
         dict = splitdef(expr)
         return new(
-            dict[:name],
+            get(dict, :name, nothing),
             SplitArg.(dict[:args]),
             SplitArg.(dict[:kwargs]),
             dict[:body],
@@ -227,16 +246,21 @@ mutable struct SplitDef
         expr_deepcopy(s.doc_string),
         s.inline, s.generated
     )
+
+    SplitDef(name, args, kw_args, body, return_type, where_params, doc_string, inline, generated) = new(
+        name, args, kw_args, body, return_type, where_params, doc_string, inline, generated 
+    )
 end
 function MacroTools.combinedef(struct_representation::SplitDef)
     definition = combinedef(Dict(
-        :name => struct_representation.name,
+        @optional(exists(struct_representation.name),
+                  :name => struct_representation.name),
         :args => combinearg.(struct_representation.args),
         :kwargs => combinearg.(struct_representation.kw_args),
         :body => struct_representation.body,
         :whereparams => struct_representation.where_params,
         @optional(exists(struct_representation.return_type),
-                :rtype => struct_representation.return_type)
+                  :rtype => struct_representation.return_type)
     ))
     return combinedef(FunctionMetadata(
         struct_representation.doc_string,
@@ -269,7 +293,7 @@ export SplitDef, combinecall
 ##  SplitMacro  ##
 
 "
-A data representation of a macro invocation.
+A data representation of a macro invocation, analogous to `SplitDef` and `SplitArg`.
 The constructor returns `nothing` if the expression isn't a macro invocation.
 
 Turn this struct back into a macro call with `combinemacro()`.
@@ -296,6 +320,7 @@ mutable struct SplitMacro
         map(a -> deepcopy_args ? expr_deepcopy(a) : a,
             src.args)
     )
+    SplitMacro(name, source, args) = new(name, source, args)
 end
 
 "Turns the data representaton of a macro call into an AST"
@@ -316,6 +341,8 @@ export SplitMacro, combinemacro, is_macro_invocation
 
 "
 A data representation of a type declaration, such as `C{R, T<:Integer} <: B`.
+Analogous to `SplitDef` and `SplitArg`.
+
 The constructor returns `nothing` if the expression isn't a macro invocation.
 
 If you want to skip type checking (such as the name being a Symbol),
@@ -347,7 +374,9 @@ mutable struct SplitType
                 return nothing
             end
             for tt in output.type_params
-                if !(tt isa Symbol) && (!isexpr(tt, :<:) || !(tt.args[1] isa Symbol))
+                if !(tt isa Symbol) &&
+                   (!isexpr(tt, :<:) || (length(tt.args) != 2) || !(tt.args[1] isa Symbol))
+                #begin
                     return nothing
                 end
             end
@@ -358,6 +387,7 @@ mutable struct SplitType
 
         return output
     end
+    SplitType(name, type_params, parent) = new(name, type_params, parent)
 end
 
 function combinetype(st::SplitType)

@@ -1,22 +1,46 @@
 # Test SplitArg:
-for (input, expected) in [ (
-                                :( f(a, b=7, c::Int, d::Float64=0.1 )),
-                                SplitArg.([
-                                    :a,
-                                    :( b=7 ),
-                                    :( c::Int ),
-                                    :( d::Float64=0.1 )
-                                ])
-                           ) ]
-    input_args = input.args[2:end]
-    if isexpr(input_args[1], :parameters)
-        input_args = input_args[2:end]
+for (input, expected_field_values) in [  (:a, (
+                                             :a,
+                                             :Any,
+                                             false,
+                                             nothing,
+                                             false
+                                         )),
+                                         (:( i=7 ), (
+                                             :i,
+                                             :Any,
+                                             false,
+                                             7,
+                                             false
+                                         )),
+                                         (:( i::Int ), (
+                                             :i,
+                                             :Int,
+                                             false,
+                                             nothing,
+                                             false
+                                         )),
+                                         (:( $(esc(:i))::Int = 10 ), (
+                                             esc(:i),
+                                             :Int,
+                                             false,
+                                             10,
+                                             false
+                                         )),
+                                         (esc(:( i::Int... )), (
+                                             :i,
+                                             :Int,
+                                             true,
+                                             nothing,
+                                             true
+                                         ))
+                                      ]
+    split = SplitArg(input)
+    for (field_name, field_expected_value) in zip(fieldnames(SplitArg), expected_field_values)
+        @bp_check(getfield(split, field_name) == field_expected_value,
+                  "In arg expression '$input', expected SplitArg.$field_name ",
+                    "to be $field_expected_value, but it was ", getfield(split, field_name))
     end
-
-    actual = SplitArg.(input_args)
-    @bp_check(map(e -> getfield.(Ref(e), fieldnames(SplitArg)), expected) ==
-                map(a -> getfield.(Ref(a), fieldnames(SplitArg)), actual),
-              "Expected ", input, " to have the args ", expected, ", but got ", actual)
 end
 
 # Test SplitDef:
@@ -25,9 +49,9 @@ for (input, expected) in [ (
                                (:f, [ ], [ ], 5, nothing, (), nothing, false)
                            ),
                            (
-                               :( abc(def, ghi::Int)::Float32 = def*ghi ),
-                               (:abc, SplitArg.([ :def, :( ghi::Int ) ]), [ ],
-                                :( def * ghi ), :Float32,
+                               :( (def, ghi::Int) -> def*ghi ),
+                               (nothing, SplitArg.([ :def, :( ghi::Int ) ]), [ ],
+                                :( def * ghi ), nothing,
                                 (), nothing, false)
                            ),
                            (
@@ -104,6 +128,8 @@ end
 @bp_check(isnothing(SplitType(:( f() = 5 ))))
 @bp_check(isnothing(SplitType(:( A.B{C} <: D ))),
           "Qualified names shouldn't be allowed in 'strict' mode")
+@bp_check(isnothing(SplitType(:( A{<:B} <: C ))),
+          "Tried to fool SplitType within the type params")
 let st = SplitType(:A)
     @bp_check(exists(st))
     @bp_check(st.name == :A)
