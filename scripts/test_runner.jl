@@ -1,4 +1,5 @@
-# This file contains the test-running code for all B+ package projects.
+# This file contains the test-running code for all B+ sub-projects.
+# The path to this file is provided by `BplusCore.TEST_RUNNER_PATH`.
 
 
 #####################
@@ -14,7 +15,8 @@ end
 
 # You can choose which files to test by passing them as command-line args,
 #    or through a global named 'TEST_NAMES'.
-# The '.jl' extension is automatically appended if necessary.
+# The '.jl' extension is automatically added if it's missing.
+# The path is relative to the test directory mentioned above.
 const TEST_FILES =
     # If desired test files are explicitly given, just run them.
     if @isdefined TEST_NAMES
@@ -66,7 +68,6 @@ const TEST_HEADER = quote
     const ALL_REALS = TupleTools.vcat(ALL_INTEGERS, ALL_FLOATS, (Bool, ))
 
     # Macros to perform a test while making sure no allocations happen.
-    #TODO: Look at existing attempts to test memory allocations in Julia: https://github.com/JuliaObjects/ConstructionBase.jl/blob/master/test/runtests.jl#L349-L355
     """
     Tests that the given expression equals the given value,
     and does not allocate any heap memory when evaluating.
@@ -141,7 +142,7 @@ end
 
 for f_path in TEST_FILES
     f_name = basename(f_path)
-    println("\nRunning ", f_name, "...")
+    println(stderr, "\nRunning ", f_name, "...")
     try
         module_name = Symbol(:UnitTests_, f_name)
         @eval module $module_name
@@ -151,4 +152,4 @@ for f_path in TEST_FILES
     finally end
 end
 
-println("Tests finished!")
+println(stderr, "Tests finished!")
