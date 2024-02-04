@@ -74,7 +74,7 @@ export function_wrapping_is_valid
 Checks that an expression is a Symbol, possibly nested within `.` operators.
 For example, `Base.empty`.
 
-Optionally allows 
+Optionally allows type parameters at the end of the expression, like `:( A.B{C} )`.
 "
 function is_scopable_name(expr, allow_type_params::Bool = false)::Bool
     if isexpr(expr, :curly)
@@ -133,7 +133,11 @@ Note that MacroTools' version of this function is overly permissive.
 "
 is_function_decl(expr)::Bool = is_short_function_decl(shortdef(expr))
 
-export is_scopable_name, is_function_call, is_short_function_decl, is_function_decl
+is_macro_invocation(expr) = isexpr(expr, :macrocall)
+
+export is_scopable_name, is_function_call,
+       is_short_function_decl, is_function_decl,
+       is_macro_invocation
 
 
 "Deep-copies an expression AST, except for things that should not be copied like literal modules"
@@ -149,29 +153,46 @@ end
 export expr_deepcopy
 
 
+#######################
+
+"
+Some data representation of a particular kind of expression.
+
+Turn it back into the original expression with `combine_expr(e)`.
+"
+abstract type AbstractSplitExpr end
+combine_expr(a::AbstractSplitExpr) = error("combine_expr(::", typeof(a), ") not implemented")
+
+export AbstractSplitExpr, combine_expr
+
+
 ##  SplitArg  ##
 
 "
 A data represenation of an argument declaration (a.k.a. the output of `MacroTools.splitarg()`).
 Also handles the whole argument declaration being wrapped in an `esc()`, which `splitarg()` does not.
 "
-mutable struct SplitArg
+mutable struct SplitArg <: AbstractSplitExpr
     name # Almost always a Symbol, but technically could be other syntax structures (like 'esc()').
     type # Usually a Symbol, or dot expression like `Random.AbstractRNG`.
-         # If no type was given, this is set to ':Any'.
+         # If no type was given, or the type was ':Any', this will be set to 'nothing'.
     is_splat::Bool # Does it end in a '...'?
     default_value::Optional # `nothing` if not given.
-                            # Note that the default value `nothing` will show up here as a Symbol.
-                            # OTOH you interpolated a literal `nothing` into the default value expression,
+                            # Note that the actual default value `nothing` will show up here as `:nothing`.
+                            # But if you interpolated a literal `nothing` into the default value expression,
                             #    it will get mistaken here for "no default value".
     is_escaped::Bool # If true, the whole thing was wrapped in an 'esc()'.
 
     function SplitArg(expr)
-        if isexpr(expr, :escape)
-            return new(splitarg(expr.args[1])..., true)
+        val = if isexpr(expr, :escape)
+            new(splitarg(expr.args[1])..., true)
         else
-            return new(splitarg(expr)..., false)
+            new(splitarg(expr)..., false)
         end
+        if (val.type == :Any)
+            val.type = nothing
+        end
+        return val
     end
     SplitArg(src::SplitArg) = new(expr_deepcopy(src.name), expr_deepcopy(src.type),
                                   src.is_splat, expr_deepcopy(src.default_value),
@@ -179,6 +200,41 @@ mutable struct SplitArg
     SplitArg(name, type, is_splat, default_value, is_escaped) = new(name, type, is_splat, default_value, is_escaped)
 end
 
+function MacroTools.combinearg(a::SplitArg)
+    # MacroTools treats '::Any' and no typing as the same,
+    #    so I'm ignoring their implementation.
+    raw_expr =
+        if exists(a.type)
+            if exists(a.default_value)
+                if a.is_splat
+                    :( $(a.name)::$(a.type)... = $(a.default_value) )
+                else
+                    :( $(a.name)::$(a.type) = $(a.default_value) )
+                end
+            else
+                if a.is_splat
+                    :( $(a.name)::$(a.type)... )
+                else
+                    :( $(a.name)::$(a.type) )
+                end
+            end
+        else
+            if exists(a.default_value)
+                if a.is_splat
+                    :( $(a.name)... = $(a.default_value) )
+                else
+                    :( $(a.name) = $(a.default_value) )
+                end
+            else
+                if a.is_splat
+                    :( $(a.name)... )
+                else
+                    a.name
+                end
+            end
+        end
+    return a.is_escaped ? esc(raw_expr) : raw_expr
+end
 MacroTools.combinearg(a::SplitArg) = let inner_expr = combinearg(a.name, a.type, a.is_splat, a.default_value)
     if a.is_escaped
         return esc(inner_expr)
@@ -186,8 +242,88 @@ MacroTools.combinearg(a::SplitArg) = let inner_expr = combinearg(a.name, a.type,
         return inner_expr
     end
 end
+combine_expr(a::SplitArg) = MacroTools.combinearg(a)
 
 export SplitArg
+
+
+##  SplitType  ##
+
+"
+A data representation of a type declaration, such as `C{R, T<:Integer} <: B`.
+Analogous to `SplitDef` and `SplitArg`.
+
+The constructor returns `nothing` if the expression isn't a macro invocation.
+
+If you want to skip type checking (such as the name being a Symbol),
+    pass `false` in the constructor.
+"
+mutable struct SplitType <: AbstractSplitExpr
+    name # Must be a Symbol in 'strict' mode
+    type_params::Vector # Elements must be Symbol or 'T<:expr' in 'strict' mode.
+                        # Usually the expr will be a scoped name, but technically could be any expression.
+    parent::Optional # Usually a scoped name (e.x. 'A' or 'M1.M2.A'),
+                     #    but technically could be any expression.
+    is_escaped::Bool
+
+    function SplitType(expr, strict_mode::Bool = true)
+        is_escaped = isexpr(expr, :escape)
+        if is_escaped
+            expr = expr.args[1]
+        end
+
+        local output::SplitType
+        if @capture(expr, n_{t__} <: b_)
+            output = new(n, t, b, is_escaped)
+        elseif @capture(expr, n_{t__})
+            output = new(n, t, b, is_escaped)
+        elseif @capture(expr, n_<:b_)
+            output = new(n, [], b, is_escaped)
+        else
+            output = new(expr, [], nothing, is_escaped)
+        end
+
+        if strict_mode
+            if !isa(output.name, Symbol)
+                return nothing
+            end
+            for tt in output.type_params
+                if !(tt isa Symbol) &&
+                   (!isexpr(tt, :<:) || (length(tt.args) != 2) || !(tt.args[1] isa Symbol))
+                #begin
+                    return nothing
+                end
+            end
+            if !(output.parent isa Union{Nothing, Symbol, Expr})
+                return nothing
+            end
+        end
+
+        return output
+    end
+    SplitType(name, type_params, parent, is_escaped) = new(name, type_params, parent, is_escaped)
+end
+
+function combinetype(st::SplitType)
+    raw_expr = 
+        if isempty(st.type_params)
+            if isnothing(st.parent)
+                st.name
+            else
+                :( $(st.name) <: $(st.parent) )
+            end
+        else
+            if isnothing(st.parent)
+                :( $(st.name){$(st.type_params...)} )
+            else
+                :( $(st.name){$(st.type_params...)} <: $(st.parent) )
+            end
+        end
+    return st.is_escaped ? esc(raw_expr) : raw_expr
+end
+combine_expr(st::SplitType) = combinetype(st)
+
+export SplitType, combinetype
 
 
 ##  SplitDef  ##
@@ -197,21 +333,26 @@ A data representation of the output of `MacroTools.splitdef()`,
     plus the ability to recognize meta-data like doc-strings and `@inline`.
 
 For convenience, it can also represent function signatures (i.e. calls),
-    and the body will be set to `nothing`.
-See `combinecall()` for the opposite.
+    by setting the body to `nothing` (not to be confused with `:nothing`).
 "
-mutable struct SplitDef
+mutable struct SplitDef <: AbstractSplitExpr
     name::Optional # `nothing` if this is a lambda
     args::Vector{SplitArg}
     kw_args::Vector{SplitArg}
     body
     return_type::Optional # `nothing` if not given
-    where_params::Tuple
+    where_params::Vector{SplitType}
     doc_string::Optional{AbstractString}
     inline::Bool
     generated::Bool
+    is_escaped::Bool
 
     function SplitDef(expr)
+        is_escaped::Bool = isexpr(expr, :escape)
+        if is_escaped
+            expr = expr.args[1]
+        end
+
         metadata = FunctionMetadata(expr, false)
         if isnothing(metadata)
             error("Invalid function declaration syntax: ", expr)
@@ -230,8 +371,9 @@ mutable struct SplitDef
             SplitArg.(dict[:kwargs]),
             dict[:body],
             get(dict, :rtype, nothing),
-            dict[:whereparams],
-            metadata.doc_string, metadata.inline, metadata.generated
+            [SplitType(w) for w in dict[:whereparams]],
+            metadata.doc_string, metadata.inline, metadata.generated,
+            is_escaped
         )
     end
 
@@ -242,9 +384,9 @@ mutable struct SplitDef
         SplitArg.(s.kw_args),
         copy_body ? expr_deepcopy(s.body) : s.body,
         expr_deepcopy(s.return_type),
-        expr_deepcopy.(s.where_params),
+        SplitType.(s.where_params),
         expr_deepcopy(s.doc_string),
-        s.inline, s.generated
+        s.inline, s.generated, s.is_escaped
     )
 
     SplitDef(name, args, kw_args, body, return_type, where_params, doc_string, inline, generated) = new(
@@ -258,20 +400,24 @@ function MacroTools.combinedef(struct_representation::SplitDef)
         :args => combinearg.(struct_representation.args),
         :kwargs => combinearg.(struct_representation.kw_args),
         :body => struct_representation.body,
-        :whereparams => struct_representation.where_params,
+        :whereparams => combinetype.(struct_representation.where_params),
         @optional(exists(struct_representation.return_type),
                   :rtype => struct_representation.return_type)
     ))
-    return combinedef(FunctionMetadata(
+    raw_expr = combinedef(FunctionMetadata(
         struct_representation.doc_string,
         struct_representation.inline,
         struct_representation.generated,
         definition
     ))
+    return struct_representation.is_escaped ? esc(raw_expr) : raw_expr
 end
 
 "Like `MacroTools.combinedef()`, but emits a function call instead of a definition"
 function combinecall(struct_representation::SplitDef)
+    @bp_check(exists(struct_representation.name),
+              "A function call/signature must have a name")
+
     # Ordered and unordered parameters look identical in the AST.
     # For ordered parameters, we want to replace `a::T = v` with `a`.
     # For named parameters, we want to replace `a::T = v` with `a=a`.
@@ -280,11 +426,20 @@ function combinecall(struct_representation::SplitDef)
     kw_args = map(a -> a.is_splat ? :( $(a.name)... ) : Expr(:kw, a.name, a.name),
                   struct_representation.kw_args)
 
-    return Expr(:call,
+    raw_expr = Expr(:call,
         struct_representation.name,
         @optional(!isempty(kw_args), Expr(:parameters, kw_args...)),
         args...
     )
+    return struct_representation.is_escaped ? esc(raw_expr) : raw_expr
+end
+
+function combine_expr(sd::SplitDef)
+    if isnothing(sd.body)
+        return combinecall(sd)
+    else
+        return MacroTools.combinedef(sd)
+    end
 end
 
 export SplitDef, combinecall
@@ -298,7 +453,7 @@ The constructor returns `nothing` if the expression isn't a macro invocation.
 
 Turn this struct back into a macro call with `combinemacro()`.
 "
-mutable struct SplitMacro
+mutable struct SplitMacro <: AbstractSplitExpr
     name::Symbol
     source::LineNumberNode
     args::Vector
@@ -332,81 +487,7 @@ function combinemacro(m::SplitMacro)
     )
 end
 
-is_macro_invocation(expr) = isexpr(expr, :macrocall)
-
-export SplitMacro, combinemacro, is_macro_invocation
-
-
-##  SplitType  ##
-
-"
-A data representation of a type declaration, such as `C{R, T<:Integer} <: B`.
-Analogous to `SplitDef` and `SplitArg`.
-
-The constructor returns `nothing` if the expression isn't a macro invocation.
-
-If you want to skip type checking (such as the name being a Symbol),
-    pass `false` in the constructor.
-
-Turn this struct back into the original expression with `combinetype()`.
-"
-mutable struct SplitType
-    name # Must be a Symbol in 'strict' mode
-    type_params::Vector # Elements must be Symbol or 'T<:expr' in 'strict' mode.
-                        # Usually the expr will be a scoped name, but technically could be any expression.
-    parent::Optional # Usually a scoped name (e.x. 'A' or 'M1.M2.A'),
-                     #    but technically could be any expression.
-
-    function SplitType(expr, strict_mode::Bool = true)
-        local output::SplitType
-        if @capture(expr, n_{t__} <: b_)
-            output = new(n, t, b)
-        elseif @capture(expr, n_{t__})
-            output = new(n, t, b)
-        elseif @capture(expr, n_<:b_)
-            output = new(n, [], b)
-        else
-            output = new(expr, [], nothing)
-        end
-
-        if strict_mode
-            if !isa(output.name, Symbol)
-                return nothing
-            end
-            for tt in output.type_params
-                if !(tt isa Symbol) &&
-                   (!isexpr(tt, :<:) || (length(tt.args) != 2) || !(tt.args[1] isa Symbol))
-                #begin
-                    return nothing
-                end
-            end
-            if !(output.parent isa Union{Nothing, Symbol, Expr})
-                return nothing
-            end
-        end
-
-        return output
-    end
-    SplitType(name, type_params, parent) = new(name, type_params, parent)
-end
-
-function combinetype(st::SplitType)
-    if isempty(st.type_params)
-        if isnothing(st.parent)
-            return st.name
-        else
-            return :( $(st.name) <: $(st.parent) )
-        end
-    else
-        if isnothing(st.parent)
-            return :( $(st.name){$(st.type_params...)} )
-        else
-            return :( $(st.name){$(st.type_params...)} <: $(st.parent) )
-        end
-    end
-end
-
-export SplitType, combinetype
+export SplitMacro, combinemacro
 
 
 ##  Assignment operators  ##

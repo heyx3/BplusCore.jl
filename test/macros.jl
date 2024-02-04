@@ -1,14 +1,14 @@
 # Test SplitArg:
 for (input, expected_field_values) in [  (:a, (
                                              :a,
-                                             :Any,
+                                             nothing,
                                              false,
                                              nothing,
                                              false
                                          )),
                                          (:( i=7 ), (
                                              :i,
-                                             :Any,
+                                             nothing,
                                              false,
                                              7,
                                              false
@@ -46,13 +46,13 @@ end
 # Test SplitDef:
 for (input, expected) in [ (
                                :( f() = 5 ),
-                               (:f, [ ], [ ], 5, nothing, (), nothing, false)
+                               (:f, [ ], [ ], 5, nothing, [], nothing, false)
                            ),
                            (
                                :( (def, ghi::Int) -> def*ghi ),
                                (nothing, SplitArg.([ :def, :( ghi::Int ) ]), [ ],
                                 :( def * ghi ), nothing,
-                                (), nothing, false)
+                                [], nothing, false)
                            ),
                            (
                                ( quote
@@ -66,7 +66,7 @@ for (input, expected) in [ (
                                    SplitArg.([ :mnop, Expr(:kw, :qrs, 5) ]),
                                    :( return jkl ),
                                    nothing,
-                                   (:T, ),
+                                   SplitType.([ :T ]),
                                    nothing, false
                                )
                            ),
@@ -83,7 +83,7 @@ for (input, expected) in [ (
                                    SplitArg.([ :mnop, Expr(:kw, :qrs, 5) ]),
                                    :( return jkl ),
                                    nothing,
-                                   (:T, ),
+                                   SplitType.([ :T ]),
                                    "ABCdef",
                                    true
                                )
@@ -92,7 +92,7 @@ for (input, expected) in [ (
                                :( abc(def, ghi::Int)::Float32 ),
                                (:abc, SplitArg.([ :def, :( ghi::Int ) ]), [ ],
                                 nothing, :Float32,
-                                (), nothing, false)
+                                [], nothing, false)
                            )
                          ]
     input = rmlines(input)
@@ -101,15 +101,24 @@ for (input, expected) in [ (
     actual_fields = getproperty.(Ref(actual), field_names)
     for (name, f_actual, f_expected) in zip(field_names, actual_fields, expected)
         f_actual = prettify(f_actual)
-        # SplitArg requires a little extra effort to compare.
-        if name in (:args, :kw_args)
-            f_actual = map(a -> getfield.(Ref(a), fieldnames(SplitArg)), f_actual)
-            f_expected = map(e -> getfield.(Ref(e), fieldnames(SplitArg)), f_expected)
+
+        # AbstractSplitExpr types are mutable, and must be compared
+        #    by turning them into a tuple of their type and fields.
+        streamline_value(m) = if m isa AbstractVector
+            streamline_value.(m)
+        elseif m isa AbstractDict
+            Dict((streamline_value(k)=>streamline_value(v) for (k,v) in m)...)
+        elseif ismutable(m)
+            (typeof(m), getfield.(Ref(m), fieldnames(typeof(m)))...)
+        else
+            m
         end
+        f_expected = streamline_value(f_expected)
+        f_actual = streamline_value(f_actual)
+
         @bp_check(f_actual == f_expected,
-                  "SplitDef.", name, " should be (", typeof(f_expected), ") ", f_expected, ", but was (",
-                  typeof(f_actual), ") ", f_actual,
-                  "; in function:\n", input, "\n\n")
+                  "SplitDef.$name should be $f_expected, but was $f_actual; in def expression:\n",
+                    "$input\n\n")
     end
 end
 
