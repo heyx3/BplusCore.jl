@@ -11,7 +11,10 @@ macro ano_enum(args::Symbol...)
     arg_exprs = map(s -> :(Val{Symbol($s)}), arg_names)
     return :( Union{$(arg_exprs...)} )
 end
-export @ano_enum
+macro ano_value(v)
+    return :( Val($(QuoteNode(v))) )
+end
+export @ano_enum, @ano_value
 
 
 """

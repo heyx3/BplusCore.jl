@@ -1,6 +1,10 @@
-# Test @ano_enum:
+# Test @ano_enum and @ano_value:
 @bp_test_no_allocations(@ano_enum(ABC, DEF, GHI),
                         Union{Val{:ABC}, Val{:DEF}, Val{:GHI}})
+@bp_test_no_allocations(@ano_value(ABC) isa @ano_enum(ABC, DEF, GHI),
+                        true)
+@bp_check(isa(@ano_value(X), @ano_enum(X, Y, Z)))
+@bp_check(!isa(@ano_value(A), @ano_enum(X, Y, Z)))
 
 
 # Define some enums with the same value names.

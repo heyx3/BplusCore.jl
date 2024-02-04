@@ -8,6 +8,7 @@
   * `SplitArg` can parse escaped argument declarations (e.x. `esc(i::Int)`), and `combinearg()` can emit them to assist macros in code generation.
   * Add new constructor to all the "split" data types (`SplitDef`, `SplitArg`, etc) for manually providing their fields.
   * Add support for lambdas (`->` expressions) to `SplitDef`
+* Add `@ano_value` to go with `@ano_enum`
 
 # v0.1.0
 
