@@ -34,7 +34,8 @@ function FunctionMetadata(expr, check_function_grammar::Bool = true)::Optional{F
         else
             return nothing
         end
-    #NOTE: this snippet comes from MacroTools source; unfortunately it isn't provided explicitly
+    #NOTE: this snippet comes from MacroTools source;
+    #    unfortunately it isn't available as a helper function
     elseif !check_function_grammar || @capture(longdef(expr), function (fcall_ | fcall_) body_ end)
         return FunctionMetadata(nothing, false, false, expr)
     else
@@ -204,42 +205,71 @@ function MacroTools.combinearg(a::SplitArg)
     # MacroTools treats '::Any' and no typing as the same,
     #    so I'm ignoring their implementation.
     raw_expr =
-        if exists(a.type)
-            if exists(a.default_value)
-                if a.is_splat
-                    :( $(a.name)::$(a.type)... = $(a.default_value) )
+        if exists(a.name)
+            if exists(a.type)
+                if exists(a.default_value)
+                    if a.is_splat
+                        Expr(:kw, :( $(a.name)::$(a.type)... ), a.default_value)
+                    else
+                        Expr(:kw, :( $(a.name)::$(a.type) ), a.default_value)
+                    end
                 else
-                    :( $(a.name)::$(a.type) = $(a.default_value) )
+                    if a.is_splat
+                        :( $(a.name)::$(a.type)... )
+                    else
+                        :( $(a.name)::$(a.type) )
+                    end
                 end
             else
-                if a.is_splat
-                    :( $(a.name)::$(a.type)... )
+                if exists(a.default_value)
+                    if a.is_splat
+                        Expr(:kw, :( $(a.name)... ), a.default_value)
+                    else
+                        Expr(:kw, a.name, a.default_value)
+                    end
                 else
-                    :( $(a.name)::$(a.type) )
+                    if a.is_splat
+                        :( $(a.name)... )
+                    else
+                        a.name
+                    end
                 end
             end
         else
-            if exists(a.default_value)
-                if a.is_splat
-                    :( $(a.name)... = $(a.default_value) )
+            if exists(a.type)
+                if exists(a.default_value)
+                    if a.is_splat
+                        Expr(:kw, :( ::$(a.type)... ), a.default_value)
+                    else
+                        Expr(:kw, :( ::$(a.type) ), a.default_value)
+                    end
                 else
-                    :( $(a.name) = $(a.default_value) )
+                    if a.is_splat
+                        :( ::$(a.type)... )
+                    else
+                        :( ::$(a.type) )
+                    end
                 end
             else
-                if a.is_splat
-                    :( $(a.name)... )
+                if exists(a.default_value)
+                    if a.is_splat
+                        Expr(:kw, :( _... ), a.default_value)
+                    else
+                        Expr(:kw, :_, a.default_value)
+                    end
                 else
-                    a.name
+                    if a.is_splat
+                        :( _... )
+                    else
+                        :_
+                    end
                 end
             end
         end
-    return a.is_escaped ? esc(raw_expr) : raw_expr
-end
-MacroTools.combinearg(a::SplitArg) = let inner_expr = combinearg(a.name, a.type, a.is_splat, a.default_value)
-    if a.is_escaped
-        return esc(inner_expr)
+    return if a.is_escaped
+        esc(raw_expr)
     else
-        return inner_expr
+        raw_expr
     end
 end
 combine_expr(a::SplitArg) = MacroTools.combinearg(a)
@@ -302,6 +332,12 @@ mutable struct SplitType <: AbstractSplitExpr
         return output
     end
     SplitType(name, type_params, parent, is_escaped) = new(name, type_params, parent, is_escaped)
+    SplitType(src::SplitType, shallow_copy::Bool) = new(
+        shallow_copy ? src.name : expr_deepcopy(src.name),
+        shallow_copy ? copy(src.type_params) : expr_deepcopy.(src.type_params),
+        shallow_copy ? src.parent : expr_deepcopy(src.parent),
+        src.is_escaped
+    )
 end
 
 function combinetype(st::SplitType)
@@ -371,7 +407,7 @@ mutable struct SplitDef <: AbstractSplitExpr
             SplitArg.(dict[:kwargs]),
             dict[:body],
             get(dict, :rtype, nothing),
-            [SplitType(w) for w in dict[:whereparams]],
+            [SplitType(w, false) for w in dict[:whereparams]],
             metadata.doc_string, metadata.inline, metadata.generated,
             is_escaped
         )
@@ -389,8 +425,9 @@ mutable struct SplitDef <: AbstractSplitExpr
         s.inline, s.generated, s.is_escaped
     )
 
-    SplitDef(name, args, kw_args, body, return_type, where_params, doc_string, inline, generated) = new(
-        name, args, kw_args, body, return_type, where_params, doc_string, inline, generated 
+    SplitDef(name, args, kw_args, body, return_type, where_params, doc_string, inline, generated, is_escaped) = new(
+        name, args, kw_args, body, return_type,
+        where_params, doc_string, inline, generated, is_escaped
     )
 end
 function MacroTools.combinedef(struct_representation::SplitDef)
@@ -421,10 +458,18 @@ function combinecall(struct_representation::SplitDef)
     # Ordered and unordered parameters look identical in the AST.
     # For ordered parameters, we want to replace `a::T = v` with `a`.
     # For named parameters, we want to replace `a::T = v` with `a=a`.
-    args = map(a -> a.is_splat ? :( $(a.name)... ) : a.name,
-               struct_representation.args)
-    kw_args = map(a -> a.is_splat ? :( $(a.name)... ) : Expr(:kw, a.name, a.name),
-                  struct_representation.kw_args)
+    args = map(struct_representation.args) do arg
+        return combine_expr(
+            SplitArg(arg.name, nothing, arg.is_splat, nothing, arg.is_escaped)
+        )
+    end
+    kw_args = map(struct_representation.kw_args) do arg
+        return combine_expr(if arg.is_splat
+            SplitArg(arg.name, nothing, true, nothing, arg.is_escaped)
+        else
+            SplitArg(arg.name, nothing, false, arg.name, arg.is_escaped)
+        end)
+    end
 
     raw_expr = Expr(:call,
         struct_representation.name,
