@@ -3,6 +3,7 @@
 * Fix bugs with `Vec` ranges with negative step values
 * Improve inline documentation, and error-checking of input data
 * Huge upgrades to macro utilities:
+  * Add `visit_exprs` for debugging expressions
   * Adding `SplitType` for type declarations, such as `A{B<:Integer} <: C`
   * Unifying all the `Split[X]` types under `AbstractSplitExpr` and the interface `combine_expr()`
   * Handle escaping of most `Split[X]` expressions

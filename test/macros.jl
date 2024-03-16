@@ -234,3 +234,51 @@ run_tests_3(:(Base.f))
 run_tests_3(:(Base.f))
 run_tests_3(:(a + b), false)
 run_tests_3(:(a()), false)
+
+# Test visit_exprs:
+visit_expr_test() = begin
+    e = Expr(:root,
+        Expr(:a,
+            1,
+            "2",
+            Expr(:b,
+                3,
+                Symbol("4")
+            )
+        ),
+        5,
+        Expr(:c),
+        "6"
+    )
+    paths = Vector{Vector{Int}}()
+    exprs = Vector{Any}()
+    visit_exprs(e) do path_indices, path
+        push!(paths, copy(path_indices))
+        push!(exprs, path[end])
+    end
+    @bp_check(
+        paths == [
+            [ ],
+            [ 1 ],
+            [ 1, 1 ],
+            [ 1, 2 ],
+            [ 1, 3 ],
+            [ 1, 3, 1 ],
+            [ 1, 3, 2 ],
+            [ 2 ],
+            [ 3 ],
+            [ 4 ]
+        ],
+        "Actual path: ", paths
+    )
+    @bp_check(
+        exprs == [
+            e,
+            e.args[1],
+              e.args[1].args[1], e.args[1].args[2],
+              e.args[1].args[3], e.args[1].args[3].args[1], e.args[1].args[3].args[2],
+            e.args[2], e.args[3], e.args[4]
+        ],
+        "Actual exprs: ", exprs
+    )
+end; visit_expr_test()

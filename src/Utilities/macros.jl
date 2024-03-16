@@ -154,6 +154,30 @@ end
 export expr_deepcopy
 
 
+"""
+Walks through an expression depth-first,
+    invoking your lambda on every sub-expression with the following arguments:
+
+1 .A list of integers representing the path to this sub-expression (for each Expr along the way, the index of its argument)
+
+2. A list of the parents to this sub-expression, from the root down to the current expr.
+
+For example, you could pass a lambda of the form `(path, exprs) -> let e = exprs[end] ... end`.
+"""
+visit_exprs(to_do, tree) = visit_exprs(to_do, tree, Int[ ], Any[ tree ])
+visit_exprs(to_do, root, current_path, current_exprs) = to_do(current_path, current_exprs)
+visit_exprs(to_do, root::Expr, current_path, current_exprs) = begin
+    to_do(current_path, current_exprs)
+    for i in 1:length(root.args)
+        child_path = push!(copy(current_path), i)
+        child_exprs = push!(copy(current_exprs), root.args[i])
+        visit_exprs(to_do, root.args[i], child_path, child_exprs)
+    end
+end
+
+export visit_exprs
+
+
 #######################
 
 "
