@@ -12,7 +12,23 @@ macro bp_check(expr, msg...)
         end
     end
 end
-export @bp_check
+
+"Double-checks that an expression throws an error"
+macro bp_check_throws(expr, msg...)
+    msg = map(esc, msg)
+    return quote
+        try
+            $(esc(expr))
+            error($(msg...),
+                  $(isempty(msg) ? "" : ".\n  "),
+                    "Expression failed to throw: ", $(string(expr)))
+        catch e
+            nothing
+        end
+    end
+end
+
+export @bp_check, @bp_check_throws
 
 
 """
