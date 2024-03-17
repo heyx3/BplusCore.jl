@@ -394,6 +394,10 @@ A data representation of the output of `MacroTools.splitdef()`,
 
 For convenience, it can also represent function signatures (i.e. calls),
     by setting the body to `nothing` (not to be confused with `:nothing`).
+
+It can also represent lambdas by setting the name to `nothing`.
+
+It is not valid to set both the body and the name to `nothing`.
 "
 mutable struct SplitDef <: AbstractSplitExpr
     name::Optional # `nothing` if this is a lambda
