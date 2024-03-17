@@ -135,13 +135,12 @@ function generate_enum(name, definitions, args, is_bitfield::Bool)
     end
 
     main_macro = is_bitfield ?
-                     :( @bitflag $inner_name::$enum_type $(args...) ) :
+                     :( $BitFlags.@bitflag $inner_name::$enum_type $(args...) ) :
                      :( @enum $inner_name::$enum_type $(args...) )
 
     output = Expr(:toplevel, esc(:(
         module $enum_name
             $definitions
-            $(is_bitfield ? :( using BitFlags ) : :())
             $main_macro
             $(bitflag_aggregates...)
             $converter_name(i::Integer) = $inner_name(i)
