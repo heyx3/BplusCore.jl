@@ -146,3 +146,13 @@ const TEST_INTERVAL = Interval(min=1.5, size=10)
 @bp_test_no_allocations(closest_point(TEST_INTERVAL, -2.2), 1.5)
 @bp_test_no_allocations(is_touching(TEST_INTERVAL, 8.25), true)
 @bp_test_no_allocations(is_touching(TEST_INTERVAL, 18.25), false)
+
+# Test array-slicing.
+const ARR = Array{Float64, 3}(undef, 5, 11, 16)
+for x in 1:5, y in 1:11, z in 1:16
+    ARR[x, y, z] = (x*10000) + (y*100) + z
+end
+@bp_check(ARR[Box(min=v3i(3, 4, 5), max=v3i(5, 7, 16))] ==
+           ARR[3:5, 4:7, 5:16])
+@bp_check(ARR[2, 4, :][Interval(min=10, max=13)] ==
+           ARR[2, 4, 10:13])

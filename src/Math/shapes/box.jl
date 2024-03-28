@@ -404,6 +404,30 @@ end
 
 
 ##########################################
+#            Slicing Arrays              #
+
+function Base.getindex(a::AbstractArray{T, N}, b::Box{N, <:Integer}) where {T, N}
+    start = min_inclusive(b)
+    stop = max_inclusive(b)
+    slices = ntuple(Val(N)) do i
+        start[i]:stop[i]
+    end
+    return a[slices...]
+end
+function Base.setindex!(a::AbstractArray{T, N}, value, b::Box{N, <:Integer}) where {T, N}
+    start = min_inclusive(b)
+    stop = max_inclusive(b)
+    slices = ntuple(Val(N)) do i
+        start[i]:stop[i]
+    end
+    return a[slices...] = value
+end
+
+Base.getindex(a::AbstractArray, i::Interval) = getindex(a, Box(min=Vec(min_inclusive(i)), size=Vec(size(i))))
+Base.setindex!(a::AbstractArray, value, i::Interval) = setindex!(a, value, Box(min=Vec(min_inclusive(i)), size=Vec(size(i))))
+
+
+##########################################
 #         Implementation Details         #
 ##########################################
 
