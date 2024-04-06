@@ -576,6 +576,17 @@ swizzle_test()
                                   16 17 18
                         ][v2i(2, 1)],
                         13)
+@bp_test_no_allocations_setup(a = [ 10 11 12
+                                    13 14 15
+                                    16 17 18
+                                  ],
+                              a[TrueOrdering(v2i(2, 1))],
+                              11)
+@bp_test_no_allocations(@SMatrix[ 10 11 12
+                                  13 14 15
+                                  16 17 18
+                        ][TrueOrdering(v2i(2, 1))],
+                        11)
 
 # Test vsize().
 @bp_test_no_allocations_setup(
@@ -583,6 +594,12 @@ swizzle_test()
                              1.4  3.1  -1.0 ],
     vsize(arr),
     Vec(2, 3)
+)
+@bp_test_no_allocations_setup(
+    arr::Matrix{Float64} = [ 3.0  6.0  7.0
+                             1.4  3.1  -1.0 ],
+    vsize(arr, true_order=true),
+    Vec(3, 2)
 )
 
 # Test VecRange/the colon operator.

@@ -323,6 +323,21 @@ Base.reverse(v::Vec) = Vec(reverse(v.data))
 Base.getindex(a::AbstractArray, i::VecT{<:Integer}) = a[i...]
 Base.setindex!(a::AbstractArray, t, i::VecT{<:Integer}) = (a[i...] = t)
 
+"
+Indexes an array using the vector's reversed elements,
+    so that for example the `y` component of a 2D index points to a row
+    rather than a column.
+This is more intuitive when working with texture pixel arrays.
+
+Also see the `true_order` argument for `vsize()`.
+"
+struct TrueOrdering{TVec<:VecT{<:Integer}}
+    v::TVec
+end
+Base.getindex(a::AbstractArray, i::TrueOrdering) = a[reverse(i.v.data)...]
+Base.setindex!(a::AbstractArray, value, i::TrueOrdering) = a[reverse(i.v.data)...] = value
+export TrueOrdering
+
 @inline Base.getindex(v::Vec, i::Integer) = v.data[i]
 Base.eltype(::Vec{N, T}) where {N, T} = T
 Base.length(::Vec{N, T}) where {N, T} = N
@@ -860,8 +875,19 @@ function vindex(i::Integer, size::Vec{N, <:Integer}) where {N}
     )
 end
 
-"Gets the size of an array as a `Vec`, rather than an `NTuple`."
-@inline vsize(arr::AbstractArray, I=Int32) = Vec{I}(size(arr)...)
+"
+Gets the size of an array as a `Vec`, rather than an `NTuple`.
+
+If you pass `true_order=true`, then the elements of the vector will be reversed,
+    so that for example `y` measures the number of rows in a 2D array rather than columns.
+Also see `TrueOrdering`.
+"
+@inline vsize(arr::AbstractArray, I=Int32; true_order::Bool=false) = let s = Vec{I}(size(arr)...)
+    if true_order
+        s = reverse(s)
+    end
+    s
+end
 
 export vselect, vindex, vsize
 

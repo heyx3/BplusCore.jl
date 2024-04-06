@@ -78,7 +78,7 @@ macro make_toggleable_asserts(prefix::Symbol)
                 return :( $name_toggler() )
             elseif length(to_do) == 1
                 return :( if $name_toggler()
-                              $(esc(to_do))
+                              $(esc(to_do[1]))
                           end )
             elseif length(to_do) == 2
                 return :( if $name_toggler()

@@ -1,3 +1,8 @@
+# v0.1.2
+
+* Add `TrueOrdering`, and `true_order` for `vsize()`, so vectors can index arrays more intuitively if desired
+* Fix bug in output of `@make_toggleable_asserts`
+
 # v0.1.1
 
 * Fix bugs with `Vec` ranges with negative step values
