@@ -2,6 +2,7 @@
 
 * Add `TrueOrdering`, and `true_order` for `vsize()`, so vectors can index arrays more intuitively if desired
 * Fix bug in output of `@make_toggleable_asserts`
+* Clarify the field-of-view in `m4_projection()`
 
 # v0.1.1
 

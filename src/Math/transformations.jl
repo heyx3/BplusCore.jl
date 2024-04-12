@@ -213,9 +213,10 @@ end
 "Generates the standard OpenGL perspective matrix"
 @inline function m4_projection( near_clip::F, far_clip::F,
                                 aspect_width_over_height::F,
-                                field_of_view_degrees::F #TODO: What is this angle measuring exactly?
+                                full_vertical_field_of_view_degrees::F
                               ) where {F}
-    tan_fov::F = tan(deg2rad(field_of_view_degrees / convert(F, 2)))
+    tan_fov::F = tan(deg2rad(full_vertical_field_of_view_degrees /
+                               convert(F, 2)))
     scale_along_clip_planes::F = 1 / (far_clip - near_clip)
     return Mat{4, 4, F}(
         1/(tan_fov * aspect_width_over_height), 0, 0, 0,
