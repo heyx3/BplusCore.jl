@@ -11,6 +11,7 @@ BplusCore.Math.bp_math_asserts_enabled() = true
 
 # Execute the tests.
 const TEST_HEADER_EXTRA = quote
+    using Random, TupleTools, MacroTools, Setfield, StaticArrays, StructTypes
     using JSON3
 
     # Sadly, the macros to auto-import B+ do not work right in here.

@@ -1,5 +1,7 @@
 # This file contains the test-running code for all B+ sub-projects.
 # The path to this file is provided by `BplusCore.TEST_RUNNER_PATH`.
+# This code expects a few packages to exist; add them to your test directory project
+#    if they're not a dependency of your main project.
 
 
 #####################
@@ -55,7 +57,7 @@ end
 insert!(LOAD_PATH, 1, TEST_DIR)
 
 const TEST_HEADER = quote
-    using Random, TupleTools, MacroTools, Setfield, StaticArrays, StructTypes
+    using TupleTools, MacroTools
 
     using BplusCore
     using BplusCore.Utilities, BplusCore.Math
