@@ -44,7 +44,7 @@ export @optional, @optionalkw
 
 
 "Grabs the bytes of some bitstype, as a tuple of `UInt8`"
-@inline function reinterpret_bytes(x)::NTuple{sizeof(x), UInt8}
+@inline function reinterpret_to_bytes(x)::NTuple{sizeof(x), UInt8}
     @bp_check(isbitstype(typeof(x)), "Can't get bytes of a non-bitstype: ", typeof(x))
     let r = Ref(x)
         ptr = Base.unsafe_convert(Ptr{typeof(x)}, r)
@@ -52,21 +52,73 @@ export @optional, @optionalkw
         return GC.@preserve r unsafe_load(ptr_bytes)
     end
 end
-"Turns a subset of some bytes into a bitstype"
-@inline function reinterpret_bytes(bytes::NTuple{N, UInt8}, byte_offset::Integer, T::Type)::T where {N}
+"Copies bytes from some bitstype into a mutable store of some other bitstype"
+@inline function reinterpret_to_bytes(x::TIn, output, first_byte::Integer = 1) where {TIn}
+    @bp_check(isbitstype(TIn),
+              "Can't get bytes of a non-bitstype: ", TIn)
+    @bp_check(isbitstype(eltype(output)),
+              "Can't copy bytes into the storage of a ", typeof(output),
+                  ", because ", eltype(output), " is not a bitstype")
+    @bp_check(sizeof(x) <= (length(output) * sizeof(output)) - first_byte + 1,
+              "Output has ", length(output), " elements (of ", sizeof(output), " bytes each), ",
+                (first_byte != 1 ? "and is skipping over the first $(first_byte-1) bytes, " : ""),
+                "while the input is ", sizeof(x), " bytes")
+    let r_x = Ref(x),
+        r_a = if output isa Ref
+                  output
+              elseif output isa AbstractArray
+                  Ref(output, 1)
+              else
+                  error("Don't know how to copy bytes into a ", typeof(output))
+              end
+      GC.@preserve r_x r_a begin
+          ptr_x = Base.unsafe_convert(Ptr{TIn}, r_x)
+          ptr_a = Base.unsafe_convert(Ptr{eltype(output)}, output) + (first_byte - 1)
+          unsafe_copyto!(Base.unsafe_convert(Ptr{UInt8}, ptr_a),
+                         Base.unsafe_convert(Ptr{UInt8}, ptr_x),
+                         sizeof(x))
+      end
+    end
+    return nothing
+end
+
+"Copies some bytes to a particular bitstype"
+@inline function reinterpret_from_bytes(bytes::NTuple{N, UInt8}, ::Type{T}, first_byte::Integer = 1)::T where {T, N}
     @bp_check(isbitstype(T), "Can't convert bytes to a non-bitstype: ", T)
-    @bp_check(N - byte_offset >= sizeof(T),
+    @bp_check(sizeof(T) <= N - first_byte + 1,
               "Didn't provide enough bytes to create a ", T,
                 ": need ", sizeof(T), ", passed ", N,
-                " (with a byte offset of ", byte_offset, ")")
+                " (with a byte offset of ", first_byte-1, ")")
     let r = Ref(bytes)
+      GC.@preserve r begin
         ptr = Base.unsafe_convert(Ptr{NTuple{N, UInt8}}, r)
-        ptr += byte_offset
-        ptrData = Base.unsafe_convert(Ptr{T}, ptr)
-        return GC.@preserve r unsafe_load(ptrData)
+        ptr += first_byte - 1
+        ptr_data = Base.unsafe_convert(Ptr{T}, ptr)
+        return unsafe_load(ptr_data)
+      end
     end
 end
-export reinterpret_bytes
+@inline function reinterpret_from_bytes(mutable_bytes, ::Type{T}, first_byte::Integer = 1)::T where {T}
+    @bp_check(isbitstype(T), "Can't convert bytes to a non-bitstype: ", T)
+    @bp_check(sizeof(T) <= (length(mutable_bytes) * sizeof(eltype(mutable_bytes))) - first_byte + 1,
+              "Didn't provide enough bytes to create a ", T,
+                ": need ", sizeof(T),
+                ", passed ", length(mutable_bytes) * sizeof(eltype(mutable_bytes)), " - ", first_byte-1)
+    let r_in = if mutable_bytes isa Ref
+                   mutable_bytes
+               elseif mutable_bytes isa AbstractArray
+                   Ref(mutable_bytes, 1)
+               else
+                   error("Don't know how to copy bytes from a ", typeof(mutable_bytes))
+               end
+      GC.@preserve r_in begin
+          ptr_in = Base.unsafe_convert(Ptr{eltype(mutable_bytes)}, r_in) + (first_byte - 1)
+          ptr_out = Base.unsafe_convert(Ptr{T}, ptr_in)
+          return unsafe_load(ptr_out)
+      end
+    end
+end
+export reinterpret_to_bytes, reinterpret_from_bytes
 
 
 "
