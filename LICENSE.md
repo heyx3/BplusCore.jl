@@ -1,6 +1,6 @@
 You can also refer to the licensing in the [main repo](https://github.com/heyx3/B-plus).
 
-Copyright William Manning 2019-2023. Released under the MIT license.
+Copyright William Manning 2019-2024. Released under the MIT license.
 
 # MIT
 
