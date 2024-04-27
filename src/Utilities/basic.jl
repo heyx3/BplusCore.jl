@@ -59,10 +59,10 @@ end
     @bp_check(isbitstype(eltype(output)),
               "Can't copy bytes into the storage of a ", typeof(output),
                   ", because ", eltype(output), " is not a bitstype")
-    @bp_check(sizeof(x) <= (length(output) * sizeof(output)) - first_byte + 1,
-              "Output has ", length(output), " elements (of ", sizeof(output), " bytes each), ",
+    @bp_check(sizeof(TIn) <= (length(output) * sizeof(eltype(output))) - first_byte + 1,
+              "Output has ", length(output), " elements (of ", sizeof(eltype(output)), " bytes each), ",
                 (first_byte != 1 ? "and is skipping over the first $(first_byte-1) bytes, " : ""),
-                "while the input is ", sizeof(x), " bytes")
+                "while the input is ", sizeof(TIn), " bytes")
     let r_x = Ref(x),
         r_a = if output isa Ref
                   output
@@ -76,11 +76,44 @@ end
           ptr_a = Base.unsafe_convert(Ptr{eltype(output)}, output) + (first_byte - 1)
           unsafe_copyto!(Base.unsafe_convert(Ptr{UInt8}, ptr_a),
                          Base.unsafe_convert(Ptr{UInt8}, ptr_x),
-                         sizeof(x))
+                         sizeof(TIn))
       end
     end
     return nothing
 end
+"Copies bytes from some contiguous array of bitstype to a mutable store of some other bitstype"
+@inline function reinterpret_to_bytes(x::Ref{TIn}, count::Int,
+                                      output, first_output_byte::Integer = 1
+                                     ) where {TIn}
+    TOut = eltype(output)
+    @bp_check(isbitstype(TIn),
+              "Can't get bytes of a non-bitstype: ", TIn)
+    @bp_check(isbitstype(TOut),
+              "Can't copy bytes into the storage of a ", typeof(output),
+                  ", because ", TOut, " is not a bitstype")
+    @bp_check((sizeof(TIn) * count) <= (length(output) * sizeof(TOut)) - first_output_byte + 1,
+              "Output has ", length(output), " elements (of ", sizeof(TOut), " bytes each), ",
+                (first_byte != 1 ? "and is skipping over the first $(first_output_byte-1) bytes, " : ""),
+                "while the input is ", sizeof(TIn), " bytes")
+    let r_a = if output isa Ref
+                  output
+              elseif output isa AbstractArray
+                  Ref(output, 1)
+              else
+                  error("Don't know how to copy bytes into a ", typeof(output))
+              end
+      GC.@preserve x r_a begin
+          ptr_x = Base.unsafe_convert(Ptr{TIn}, x)
+          ptr_a = Base.unsafe_convert(Ptr{TOut}, output) + (first_output_byte - 1)
+          unsafe_copyto!(Base.unsafe_convert(Ptr{UInt8}, ptr_a),
+                         Base.unsafe_convert(Ptr{UInt8}, ptr_x),
+                         sizeof(TIn) * count)
+      end
+    end
+    return nothing
+end
+@inline reinterpret_to_bytes(x::AbstractVector, output, first_output_byte::Integer = 1) =
+    reinterpret_to_bytes(Ref(x, 1), length(x), output, first_output_byte)
 
 "Copies some bytes to a particular bitstype"
 @inline function reinterpret_from_bytes(bytes::NTuple{N, UInt8}, ::Type{T}, first_byte::Integer = 1)::T where {T, N}

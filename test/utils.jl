@@ -107,6 +107,39 @@ do_append() = append(UpTo{2, Int}((1, )),
     0x40900000 #NOTE: If this test fails, you may be on a machine with different endianness than mine
 )
 @bp_test_no_allocations_setup(
+    begin
+        a_in = UInt32[ 0, 1 ]
+        a_out = UInt32[ 3, 4 ]
+    end,
+    begin
+        reinterpret_to_bytes(a_in, a_out)
+        a_out
+    end,
+    UInt32[ 0, 1 ]
+)
+@bp_test_no_allocations_setup(
+    begin
+        a_in = UInt32[ 0, 1 ]
+        a_out = UInt32[ 3, 4 ]
+    end,
+    begin
+        reinterpret_to_bytes(@view(a_in[1:end]), a_out)
+        a_out
+    end,
+    UInt32[ 0, 1 ]
+)
+@bp_test_no_allocations_setup(
+    begin
+        a_in = UInt32[ 0, 1 ]
+        a_out = UInt32[ 3, 4 ]
+    end,
+    begin
+        reinterpret_to_bytes(Ref(a_in, 1), 2, a_out)
+        a_out
+    end,
+    UInt32[ 0, 1 ]
+)
+@bp_test_no_allocations_setup(
     a = UInt32[ 0x40900000 ],
     reinterpret_from_bytes(a, Float32),
     4.5f0 #NOTE: If this test fails, you may be on a machine with different endianness than mine
