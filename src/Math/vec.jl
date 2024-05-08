@@ -540,11 +540,27 @@ for bitwise_expr in [ :&, :|, :⊻, :⊼, :!, :<<, :>> ]
     end
 end
 
-# Help convert a Ref(Vec{T}) to a Ptr{T}, for C calls.
+# Help convert a Ref(Vec{T}[, i]) to a Ptr{T}, for C calls.
+
+Base.unsafe_convert(::Type{Ptr{T}}, r::Base.RefArray{VecT{T}}) where {T} =
+    error("Can't use the traditional Base.RefArray for Bplus.Math.Vec, as it's immutable!")
 Base.unsafe_convert(::Type{Ptr{T}}, r::Base.RefValue{<:VecT{T}}) where {T} =
     Base.unsafe_convert(Ptr{T}, Base.unsafe_convert(Ptr{Nothing}, r))
 Base.unsafe_convert(::Type{Ptr{NTuple{N, T}}}, r::Base.RefValue{Vec{N, T}}) where {N, T} =
     Base.unsafe_convert(Ptr{NTuple{N, T}}, Base.unsafe_convert(Ptr{Nothing}, r))
+Base.unsafe_convert(::Type{Ptr{Vec{N, T}}}, r::Base.RefValue{Vec{N, T}}) where {N, T} =
+    Base.unsafe_convert(Ptr{Vec{N, T}}, Base.unsafe_convert(Ptr{T}, r))
+
+struct RefVec{T, N} <: Ref{Vec{N, T}}
+    inner::Base.RefValue{Vec{N, T}}
+    index::Int
+end
+RefVec(v::Vec{N, T}, i::Integer) where {N, T} = RefVec{T, N}(Ref(v), convert(Int, i))
+Base.Ref(v::Vec, i::Integer) = RefVec(v, i)
+Base.unsafe_convert(::Type{Ptr{T}}, r::RefVec{T}) where {T} =
+    Base.unsafe_convert(Ptr{T}, r.inner) + (sizeof(T) * (r.index - 1))
+Base.unsafe_convert(::Type{Ptr{Vec{N, T}}}, r::RefVec{T, N}) where {N, T} =
+    Base.unsafe_convert(Ptr{Vec{N, T}}, Base.unsafe_convert(Ptr{T}, r))
 #
 
 #######################

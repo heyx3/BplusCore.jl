@@ -680,6 +680,16 @@ for _ in 1:100
                             val, " not in ", range)
 end
 
+# Test Ref/Ptr conversions:
+const refValue = Ref(v3f(-1, 2, -3))
+const refVec = Ref(v3f(4, -5, 6), 2)
+@bp_test_no_allocations(unsafe_load(Base.unsafe_convert(Ptr{Float32}, refValue)),
+                        -@f32(1))
+@bp_test_no_allocations(unsafe_load(Base.unsafe_convert(Ptr{Float32}, refVec)),
+                        -@f32(5))
+@bp_test_no_allocations(unsafe_load(Base.unsafe_convert(Ptr{v3f}, refValue)),
+                        v3f(-1, 2, -3))
+
 # Test vdist_sqr and vdist:
 @bp_test_no_allocations(vdist_sqr(Vec(1, 1, 1), Vec(3, 1, 1)), 4)
 @bp_test_no_allocations(vdist_sqr(Vec(1, 1, 1), Vec(1, 3, 1)), 4)

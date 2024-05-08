@@ -3,6 +3,7 @@
 * Add `TrueOrdering`, and `true_order` for `vsize()`, so vectors can index arrays more intuitively if desired
 * Fix bug in output of `@make_toggleable_asserts`
 * Clarify the field-of-view in `m4_projection()`
+* Fix several issues with getting pointers to `Vec` data
 * **[Breaking]** Split reinterpret_bytes() into `to` and `from` functions, with a more consistent API
     and support for reading/writing mutable byte arrays 
 

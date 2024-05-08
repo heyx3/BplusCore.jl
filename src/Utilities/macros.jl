@@ -1,3 +1,9 @@
+#IMPORTANT NOTE:
+#   This file is a prequel to CodeSculptor.jl and due to be removed.
+#   Extensions/improvements to it are not worth making anymore.
+#
+
+
 ##  FunctionMetadata  ##
 
 "
