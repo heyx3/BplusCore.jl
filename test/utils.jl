@@ -85,6 +85,11 @@ do_append() = append(UpTo{2, Int}((1, )),
                         (0x46, 0x5f, 0x41, 0x9a, 0x59, 0xf9, 0xb0, 0xc0))
 @bp_test_no_allocations(reinterpret_from_bytes((0x46, 0x5f, 0x41, 0x9a, 0x59, 0xf9, 0xb0, 0xc0), Float64),
                         -4345.35001)
+@bp_test_no_allocations(reinterpret_to_bytes(Vec{4, UInt8}(2, 3, 4, 5)),
+                        (0x02, 0x03, 0x04, 0x05))
+@bp_test_no_allocations(reinterpret_from_bytes((0x02, 0x03, 0x04, 0x05),
+                                               Vec{4, UInt8}),
+                        Vec{4, UInt8}(2, 3, 4, 5))
 #    Mutable bytes:
 @bp_test_no_allocations_setup(
     a = UInt32[ 0 ],
@@ -116,6 +121,17 @@ do_append() = append(UpTo{2, Int}((1, )),
         a_out
     end,
     UInt32[ 0, 1 ]
+)
+@bp_test_no_allocations_setup(
+    begin
+        a_in = UInt32[ 0, 1 ]
+        a_out = UInt32[ 3, 4 ]
+    end,
+    begin
+        reinterpret_to_bytes(a_in[2], a_out)
+        a_out
+    end,
+    UInt32[ 1, 4 ]
 )
 @bp_test_no_allocations_setup(
     begin

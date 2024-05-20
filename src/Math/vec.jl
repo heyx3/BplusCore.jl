@@ -561,7 +561,13 @@ Base.unsafe_convert(::Type{Ptr{T}}, r::RefVec{T}) where {T} =
     Base.unsafe_convert(Ptr{T}, r.inner) + (sizeof(T) * (r.index - 1))
 Base.unsafe_convert(::Type{Ptr{Vec{N, T}}}, r::RefVec{T, N}) where {N, T} =
     Base.unsafe_convert(Ptr{Vec{N, T}}, Base.unsafe_convert(Ptr{T}, r))
+Base.getindex(r::RefVec) = r.inner.x
+
+@inline Utilities.reinterpret_to_bytes(x::Vec, output, first_output_byte::Integer = 1) =
+    reinterpret_to_bytes(Ref(x, 1), 1, output, first_output_byte)
+
 #
+
 
 #######################
 #    Colon Operator   #

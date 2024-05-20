@@ -91,10 +91,6 @@ end
     @bp_check(isbitstype(TOut),
               "Can't copy bytes into the storage of a ", typeof(output),
                   ", because ", TOut, " is not a bitstype")
-    @bp_check((sizeof(TIn) * count) <= (length(output) * sizeof(TOut)) - first_output_byte + 1,
-              "Output has ", length(output), " elements (of ", sizeof(TOut), " bytes each), ",
-                (first_byte != 1 ? "and is skipping over the first $(first_output_byte-1) bytes, " : ""),
-                "while the input is ", sizeof(TIn), " bytes")
     let r_a = if output isa Ref
                   output
               elseif output isa AbstractArray
