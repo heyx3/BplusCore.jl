@@ -43,111 +43,105 @@ end
 export @optional, @optionalkw
 
 
-"Grabs the bytes of some bitstype, as a tuple of `UInt8`"
-@inline function reinterpret_to_bytes(x)::NTuple{sizeof(x), UInt8}
-    @bp_check(isbitstype(typeof(x)), "Can't get bytes of a non-bitstype: ", typeof(x))
-    let r = Ref(x)
-        ptr = Base.unsafe_convert(Ptr{typeof(x)}, r)
-        ptr_bytes = Base.unsafe_convert(Ptr{NTuple{sizeof(x), UInt8}}, ptr)
-        return GC.@preserve r unsafe_load(ptr_bytes)
+"
+Prints the current file and line, along with any data you pass in.
+Helps pin down crashes that don't leave a clear stack trace.
+"
+macro shout(data...)
+    return quote
+        print(stderr, '\n', $(string(__source__.file)), ":", $(string(__source__.line)))
+        if $(!isempty(data))
+            print(stderr, " -- ", $(esc.(data)...))
+        end
+        println(stderr, '\n')
     end
 end
-"Copies bytes from some bitstype into a mutable store of some other bitstype"
-@inline function reinterpret_to_bytes(x::TIn, output, first_byte::Integer = 1) where {TIn}
-    @bp_check(isbitstype(TIn),
-              "Can't get bytes of a non-bitstype: ", TIn)
-    @bp_check(isbitstype(eltype(output)),
-              "Can't copy bytes into the storage of a ", typeof(output),
-                  ", because ", eltype(output), " is not a bitstype")
-    @bp_check(sizeof(TIn) <= (length(output) * sizeof(eltype(output))) - first_byte + 1,
-              "Output has ", length(output), " elements (of ", sizeof(eltype(output)), " bytes each), ",
-                (first_byte != 1 ? "and is skipping over the first $(first_byte-1) bytes, " : ""),
-                "while the input is ", sizeof(TIn), " bytes")
-    let r_x = Ref(x),
-        r_a = if output isa Ref
-                  output
-              elseif output isa AbstractArray
-                  Ref(output, 1)
-              else
-                  error("Don't know how to copy bytes into a ", typeof(output))
-              end
-      GC.@preserve r_x r_a begin
-          ptr_x = Base.unsafe_convert(Ptr{TIn}, r_x)
-          ptr_a = Base.unsafe_convert(Ptr{eltype(output)}, output) + (first_byte - 1)
-          unsafe_copyto!(Base.unsafe_convert(Ptr{UInt8}, ptr_a),
-                         Base.unsafe_convert(Ptr{UInt8}, ptr_x),
-                         sizeof(TIn))
-      end
-    end
-    return nothing
-end
-"Copies bytes from some contiguous array of bitstype to a mutable store of some other bitstype"
-@inline function reinterpret_to_bytes(x::Ref{TIn}, count::Int,
-                                      output, first_output_byte::Integer = 1
-                                     ) where {TIn}
-    TOut = eltype(output)
-    @bp_check(isbitstype(TIn),
-              "Can't get bytes of a non-bitstype: ", TIn)
-    @bp_check(isbitstype(TOut),
-              "Can't copy bytes into the storage of a ", typeof(output),
-                  ", because ", TOut, " is not a bitstype")
-    let r_a = if output isa Ref
-                  output
-              elseif output isa AbstractArray
-                  Ref(output, 1)
-              else
-                  error("Don't know how to copy bytes into a ", typeof(output))
-              end
-      GC.@preserve x r_a begin
-          ptr_x = Base.unsafe_convert(Ptr{TIn}, x)
-          ptr_a = Base.unsafe_convert(Ptr{TOut}, output) + (first_output_byte - 1)
-          unsafe_copyto!(Base.unsafe_convert(Ptr{UInt8}, ptr_a),
-                         Base.unsafe_convert(Ptr{UInt8}, ptr_x),
-                         sizeof(TIn) * count)
-      end
-    end
-    return nothing
-end
-@inline reinterpret_to_bytes(x::AbstractVector, output, first_output_byte::Integer = 1) =
-    reinterpret_to_bytes(Ref(x, 1), length(x), output, first_output_byte)
+export @shout
 
-"Copies some bytes to a particular bitstype"
-@inline function reinterpret_from_bytes(bytes::NTuple{N, UInt8}, ::Type{T}, first_byte::Integer = 1)::T where {T, N}
-    @bp_check(isbitstype(T), "Can't convert bytes to a non-bitstype: ", T)
-    @bp_check(sizeof(T) <= N - first_byte + 1,
-              "Didn't provide enough bytes to create a ", T,
-                ": need ", sizeof(T), ", passed ", N,
-                " (with a byte offset of ", first_byte-1, ")")
-    let r = Ref(bytes)
-      GC.@preserve r begin
-        ptr = Base.unsafe_convert(Ptr{NTuple{N, UInt8}}, r)
-        ptr += first_byte - 1
-        ptr_data = Base.unsafe_convert(Ptr{T}, ptr)
-        return unsafe_load(ptr_data)
-      end
+
+"Some kind of byte-data source: array, Ref, Ref-plus-count, pointer-plus-count, or bits-type"
+const BytesSource = Union{AbstractArray, Ref, Tuple{Ref, Integer}, Tuple{Ptr, Integer}, Any}
+"Some kind of byte-data destination: array, Ref, returned bits-type, or pointer"
+const BytesDestination = Union{AbstractArray, Ref, DataType, Ptr}
+
+"
+Converts between two data representations by reinterpreting the bytes.
+For example:
+
+* Get the individual bytes of a uint with `(a, b, c, d) = reinterpret_bytes(0xaabbccdd, NTuple{4, UInt8})`
+* Copy a struct into a `Vector{UInt8}` with `reinterpret_bytes(my_struct, my_vector)`.
+"
+@inline function reinterpret_bytes(source::BytesSource, dest::BytesDestination)
+    # Get the source into a pointer-and-count representation.
+    if (source isa Tuple{Ptr, Integer})
+        # Continue past these if statements
+    elseif source isa Ref
+        return reinterpret_bytes((source, 1), dest)
+    elseif source isa Tuple{Ref, Integer}
+        (source_r, source_count) = source
+        @bp_check(isbitstype(eltype(source_r)),
+                  "Byte data source isn't a bitstype: Ref of ", eltype(source_r))
+        GC.@preserve source_r begin
+            return reinterpret_bytes((Base.unsafe_convert(Ptr{eltype(source_r)}, source_r), source_count), dest)
+        end
+    elseif isbitstype(typeof(source))
+        return reinterpret_bytes(Ref(source), dest)
+    elseif source isa AbstractArray
+        @bp_check(isbitstype(eltype(source)),
+                  "Byte data source isn't a bitstype: array of ", eltype(source))
+        if source isa SubArray
+            @bp_check(Base.iscontiguous(source),
+                      "Byte data source isn't a contiguous array: ", typeof(source))
+        end
+        let r = Ref(source, 1)
+            GC.@preserve r begin
+                return reinterpret_bytes((Base.unsafe_convert(Ptr{eltype(r)}, r), length(source)), dest)
+            end
+        end
+    else
+        error("Byte source data isn't a bitstype: ", typeof(source))
     end
-end
-@inline function reinterpret_from_bytes(mutable_bytes, ::Type{T}, first_byte::Integer = 1)::T where {T}
-    @bp_check(isbitstype(T), "Can't convert bytes to a non-bitstype: ", T)
-    @bp_check(sizeof(T) <= (length(mutable_bytes) * sizeof(eltype(mutable_bytes))) - first_byte + 1,
-              "Didn't provide enough bytes to create a ", T,
-                ": need ", sizeof(T),
-                ", passed ", length(mutable_bytes) * sizeof(eltype(mutable_bytes)), " - ", first_byte-1)
-    let r_in = if mutable_bytes isa Ref
-                   mutable_bytes
-               elseif mutable_bytes isa AbstractArray
-                   Ref(mutable_bytes, 1)
-               else
-                   error("Don't know how to copy bytes from a ", typeof(mutable_bytes))
-               end
-      GC.@preserve r_in begin
-          ptr_in = Base.unsafe_convert(Ptr{eltype(mutable_bytes)}, r_in) + (first_byte - 1)
-          ptr_out = Base.unsafe_convert(Ptr{T}, ptr_in)
-          return unsafe_load(ptr_out)
-      end
+    (source_ptr::Ptr, source_count) = source
+    source_byte_count = source_count * sizeof(eltype(source_ptr))
+
+    # Get the destination into a pointer representation.
+    if dest isa AbstractArray
+        dest_byte_count = length(dest) * sizeof(eltype(dest))
+        @bp_check(isbitstype(eltype(dest)),
+                  "Byte data destination isn't a bitstype: array of ", eltype(dest))
+        @bp_check(dest_byte_count >= source_byte_count,
+                  "Trying to copy ", source_byte_count, " bytes into ", dest_byte_count, " bytes")
+        let r = Ref(dest, 1)
+            GC.@preserve r begin
+                return reinterpret_bytes(source, Base.unsafe_convert(Ptr{eltype(r)}, r))
+            end
+        end
+    elseif dest isa Ptr
+        # Continue past these if statements
+    elseif dest isa Ref
+        @bp_check(isbitstype(eltype(dest)),
+                  "Byte data destination isn't a bitstype: Ref of ", eltype(dest))
+        GC.@preserve dest begin
+            return reinterpret_bytes(source, Base.unsafe_convert(Ptr{eltype(dest)}, dest))
+        end
+    elseif dest isa DataType
+        @bp_check(isbitstype(dest), "Byte data destination type isn't a bitstype: ", dest)
+        let r = Ref{dest}()
+            GC.@preserve r begin
+                reinterpret_bytes(source, r)
+                return r[]
+            end
+        end
+    else
+        error("Unexpected bytes destination: ", typeof(dest))
     end
+
+    unsafe_copyto!(Base.unsafe_convert(Ptr{UInt8}, dest),
+                   Base.unsafe_convert(Ptr{UInt8}, source_ptr),
+                   source_byte_count)
+    return nothing
 end
-export reinterpret_to_bytes, reinterpret_from_bytes
+export reinterpret_bytes
 
 
 "

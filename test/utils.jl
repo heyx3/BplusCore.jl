@@ -79,36 +79,39 @@ do_append() = append(UpTo{2, Int}((1, )),
 
 # Test reinterpret_bytes()
 #    Immutable bytes:
-@bp_test_no_allocations(reinterpret_to_bytes(4.5f0), (0x00, 0x00, 0x90, 0x40))
-@bp_test_no_allocations(reinterpret_from_bytes((0x00, 0x00, 0x90, 0x40), Float32), 4.5f0)
-@bp_test_no_allocations(reinterpret_to_bytes(-4345.35001),
+@bp_test_no_allocations(reinterpret_bytes(4.5f0, NTuple{4, UInt8}), (0x00, 0x00, 0x90, 0x40))
+@bp_test_no_allocations(reinterpret_bytes((0x00, 0x00, 0x90, 0x40), Float32), 4.5f0)
+@bp_test_no_allocations(reinterpret_bytes(-4345.35001, NTuple{8, UInt8}),
                         (0x46, 0x5f, 0x41, 0x9a, 0x59, 0xf9, 0xb0, 0xc0))
-@bp_test_no_allocations(reinterpret_from_bytes((0x46, 0x5f, 0x41, 0x9a, 0x59, 0xf9, 0xb0, 0xc0), Float64),
+@bp_test_no_allocations(reinterpret_bytes((0x46, 0x5f, 0x41, 0x9a, 0x59, 0xf9, 0xb0, 0xc0), Float64),
                         -4345.35001)
-@bp_test_no_allocations(reinterpret_to_bytes(Vec{4, UInt8}(2, 3, 4, 5)),
+@bp_test_no_allocations(reinterpret_bytes(Vec{4, UInt8}(2, 3, 4, 5), NTuple{4, UInt8}),
                         (0x02, 0x03, 0x04, 0x05))
-@bp_test_no_allocations(reinterpret_from_bytes((0x02, 0x03, 0x04, 0x05),
-                                               Vec{4, UInt8}),
+@bp_test_no_allocations(reinterpret_bytes((0x02, 0x03, 0x04, 0x05),
+                                          Vec{4, UInt8}),
                         Vec{4, UInt8}(2, 3, 4, 5))
 #    Mutable bytes:
 @bp_test_no_allocations_setup(
     a = UInt32[ 0 ],
-    begin; reinterpret_to_bytes(4.5f0, a); a[1]; end,
+    begin; reinterpret_bytes(4.5f0, a); a[1]; end,
     0x40900000 #NOTE: If this test fails, you may be on a machine with different endianness than mine
 )
 @bp_test_no_allocations_setup(
     a = Ref(UInt32(0)),
-    begin; reinterpret_to_bytes(4.5f0, a); a[]; end,
+    begin; reinterpret_bytes(4.5f0, a); a[]; end,
     0x40900000 #NOTE: If this test fails, you may be on a machine with different endianness than mine
 )
 @bp_test_no_allocations_setup(
     a = UInt32[ 0, 1 ],
-    begin; reinterpret_to_bytes(4.5f0, a, 5); a[2]; end,
+    GC.@preserve(a, begin
+        reinterpret_bytes(4.5f0, pointer(a, 1) + 4)
+        a[2]
+    end),
     0x40900000 #NOTE: If this test fails, you may be on a machine with different endianness than mine
 )
 @bp_test_no_allocations_setup(
     a = UInt32[ 0, 1 ],
-    begin; reinterpret_to_bytes(4.5f0, @view(a[2:end]) ); a[2]; end,
+    begin; reinterpret_bytes(4.5f0, @view(a[2:end]) ); a[2]; end,
     0x40900000 #NOTE: If this test fails, you may be on a machine with different endianness than mine
 )
 @bp_test_no_allocations_setup(
@@ -117,7 +120,7 @@ do_append() = append(UpTo{2, Int}((1, )),
         a_out = UInt32[ 3, 4 ]
     end,
     begin
-        reinterpret_to_bytes(a_in, a_out)
+        reinterpret_bytes(a_in, a_out)
         a_out
     end,
     UInt32[ 0, 1 ]
@@ -128,7 +131,7 @@ do_append() = append(UpTo{2, Int}((1, )),
         a_out = UInt32[ 3, 4 ]
     end,
     begin
-        reinterpret_to_bytes(a_in[2], a_out)
+        reinterpret_bytes(a_in[2], a_out)
         a_out
     end,
     UInt32[ 1, 4 ]
@@ -139,7 +142,7 @@ do_append() = append(UpTo{2, Int}((1, )),
         a_out = UInt32[ 3, 4 ]
     end,
     begin
-        reinterpret_to_bytes(@view(a_in[1:end]), a_out)
+        reinterpret_bytes(@view(a_in[1:end]), a_out)
         a_out
     end,
     UInt32[ 0, 1 ]
@@ -150,29 +153,31 @@ do_append() = append(UpTo{2, Int}((1, )),
         a_out = UInt32[ 3, 4 ]
     end,
     begin
-        reinterpret_to_bytes(Ref(a_in, 1), 2, a_out)
+        reinterpret_bytes((Ref(a_in, 1), 2), a_out)
         a_out
     end,
     UInt32[ 0, 1 ]
 )
 @bp_test_no_allocations_setup(
     a = UInt32[ 0x40900000 ],
-    reinterpret_from_bytes(a, Float32),
+    reinterpret_bytes(a, Float32),
     4.5f0 #NOTE: If this test fails, you may be on a machine with different endianness than mine
 )
 @bp_test_no_allocations_setup(
     a = Ref{UInt32}(0x40900000),
-    reinterpret_from_bytes(a, Float32),
+    reinterpret_bytes(a, Float32),
     4.5f0 #NOTE: If this test fails, you may be on a machine with different endianness than mine
 )
 @bp_test_no_allocations_setup(
     a = UInt32[ 0, 0x40900000 ],
-    reinterpret_from_bytes(a, Float32, 5),
+    GC.@preserve(a, begin
+        reinterpret_bytes(pointer(a, 1) + 4, Float32)
+    end),
     4.5f0 #NOTE: If this test fails, you may be on a machine with different endianness than mine
 )
 @bp_test_no_allocations_setup(
     a = UInt32[ 0, 0x40900000 ],
-    reinterpret_from_bytes(@view(a[2:end]), Float32),
+    reinterpret_bytes(@view(a[2:end]), Float32),
     4.5f0 #NOTE: If this test fails, you may be on a machine with different endianness than mine
 )
 struct ByteReinterpretable
@@ -180,9 +185,10 @@ struct ByteReinterpretable
     f32::Float32
     d64::UInt64
 end
-@bp_test_no_allocations(reinterpret_to_bytes(ByteReinterpretable(reinterpret(Int32, 0xabcdef34),
-                                                                 reinterpret(Float32, 0x98765432),
-                                                                 0xabcdef1234567890)),
+@bp_test_no_allocations(reinterpret_bytes(ByteReinterpretable(reinterpret(Int32, 0xabcdef34),
+                                                              reinterpret(Float32, 0x98765432),
+                                                              0xabcdef1234567890),
+                                          NTuple{sizeof(ByteReinterpretable), UInt8}),
                         (
                             # Watch endianness! If this test fails for you,
                             #    perhaps you're on a machine with a different endianness?
@@ -190,7 +196,7 @@ end
                             0x32, 0x54, 0x76, 0x98,
                             0x90, 0x78, 0x56, 0x34, 0x12, 0xef, 0xcd, 0xab
                         ))
-@bp_test_no_allocations(reinterpret_from_bytes(
+@bp_test_no_allocations(reinterpret_bytes(
                             (
                                 0x34, 0xef, 0xcd, 0xab,
                                 0x32, 0x54, 0x76, 0x98,
