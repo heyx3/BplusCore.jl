@@ -70,10 +70,11 @@ For example:
 
 * Get the individual bytes of a uint with `(a, b, c, d) = reinterpret_bytes(0xaabbccdd, NTuple{4, UInt8})`
 * Copy a struct into a `Vector{UInt8}` with `reinterpret_bytes(my_struct, my_vector)`.
+* Read the first 4 bytes of an array-view as a Float32: `f = reinterpret_bytes(@view(my_byte_array[i*4 : end]), Float32)`
 "
 @inline function reinterpret_bytes(source::BytesSource, dest::BytesDestination)
     # Get the source into a pointer-and-count representation.
-    if (source isa Tuple{Ptr, Integer})
+    if source isa Tuple{Ptr, Integer}
         # Continue past these if statements
     elseif source isa Ref
         return reinterpret_bytes((source, 1), dest)
@@ -84,8 +85,6 @@ For example:
         GC.@preserve source_r begin
             return reinterpret_bytes((Base.unsafe_convert(Ptr{eltype(source_r)}, source_r), source_count), dest)
         end
-    elseif isbitstype(typeof(source))
-        return reinterpret_bytes(Ref(source), dest)
     elseif source isa AbstractArray
         @bp_check(isbitstype(eltype(source)),
                   "Byte data source isn't a bitstype: array of ", eltype(source))
@@ -95,9 +94,11 @@ For example:
         end
         let r = Ref(source, 1)
             GC.@preserve r begin
-                return reinterpret_bytes((Base.unsafe_convert(Ptr{eltype(r)}, r), length(source)), dest)
+                return reinterpret_bytes((Base.unsafe_convert(Ptr{eltype(source)}, r), length(source)), dest)
             end
         end
+    elseif isbitstype(typeof(source))
+        return reinterpret_bytes(Ref(source), dest)
     else
         error("Byte source data isn't a bitstype: ", typeof(source))
     end
@@ -126,11 +127,12 @@ For example:
         end
     elseif dest isa DataType
         @bp_check(isbitstype(dest), "Byte data destination type isn't a bitstype: ", dest)
+        @bp_check(sizeof(dest) <= source_byte_count,
+                  "Byte data destination type (", dest, ") is ", sizeof(dest),
+                    " bytes, while the source data is ", source_byte_count)
         let r = Ref{dest}()
-            GC.@preserve r begin
-                reinterpret_bytes(source, r)
-                return r[]
-            end
+            reinterpret_bytes((source_ptr, sizeof(dest)), r)
+            return r[]
         end
     else
         error("Unexpected bytes destination: ", typeof(dest))
