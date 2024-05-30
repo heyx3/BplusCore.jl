@@ -49,11 +49,11 @@ Helps pin down crashes that don't leave a clear stack trace.
 "
 macro shout(data...)
     return quote
-        print(stderr, '\n', $(string(__source__.file)), ":", $(string(__source__.line)))
+        print(stderr, $(string(__source__.file)), ":", $(string(__source__.line)))
         if $(!isempty(data))
             print(stderr, " -- ", $(esc.(data)...))
         end
-        println(stderr, '\n')
+        println(stderr)
     end
 end
 export @shout
@@ -73,13 +73,18 @@ For example:
 * Read the first 4 bytes of an array-view as a Float32: `f = reinterpret_bytes(@view(my_byte_array[i*4 : end]), Float32)`
 "
 @inline function reinterpret_bytes(source::BytesSource, dest::BytesDestination)
+    # NOTE: I'm keeping some @shout macros in here commented out
+    #    in case this function gives us trouble again.
+
     # Get the source into a pointer-and-count representation.
     if source isa Tuple{Ptr, Integer}
         # Continue past these if statements
     elseif source isa Ref
+        # @shout "\t" typeof(source)
         return reinterpret_bytes((source, 1), dest)
     elseif source isa Tuple{Ref, Integer}
         (source_r, source_count) = source
+        # @shout "\t" typeof(source_r) " * " source_count
         @bp_check(isbitstype(eltype(source_r)),
                   "Byte data source isn't a bitstype: Ref of ", eltype(source_r))
         GC.@preserve source_r begin
@@ -92,12 +97,14 @@ For example:
             @bp_check(Base.iscontiguous(source),
                       "Byte data source isn't a contiguous array: ", typeof(source))
         end
+        # @shout "\t [.." length(source) " of " eltype(source) "..]"
         let r = Ref(source, 1)
             GC.@preserve r begin
                 return reinterpret_bytes((Base.unsafe_convert(Ptr{eltype(source)}, r), length(source)), dest)
             end
         end
     elseif isbitstype(typeof(source))
+        # @shout "\t Bits<" typeof(source) ">"
         return reinterpret_bytes(Ref(source), dest)
     else
         error("Byte source data isn't a bitstype: ", typeof(source))
@@ -108,6 +115,7 @@ For example:
     # Get the destination into a pointer representation.
     if dest isa AbstractArray
         dest_byte_count = length(dest) * sizeof(eltype(dest))
+        # @shout "\t\t" eltype(dest) " * " length(dest) " == " dest_byte_count
         @bp_check(isbitstype(eltype(dest)),
                   "Byte data destination isn't a bitstype: array of ", eltype(dest))
         @bp_check(dest_byte_count >= source_byte_count,
@@ -120,24 +128,32 @@ For example:
     elseif dest isa Ptr
         # Continue past these if statements
     elseif dest isa Ref
+        # @shout "\t\t" typeof(dest)
         @bp_check(isbitstype(eltype(dest)),
                   "Byte data destination isn't a bitstype: Ref of ", eltype(dest))
         GC.@preserve dest begin
             return reinterpret_bytes(source, Base.unsafe_convert(Ptr{eltype(dest)}, dest))
         end
     elseif dest isa DataType
+        # @shout "\t\tBits<" dest ">"
         @bp_check(isbitstype(dest), "Byte data destination type isn't a bitstype: ", dest)
         @bp_check(sizeof(dest) <= source_byte_count,
                   "Byte data destination type (", dest, ") is ", sizeof(dest),
                     " bytes, while the source data is ", source_byte_count)
         let r = Ref{dest}()
-            reinterpret_bytes((source_ptr, sizeof(dest)), r)
+            reinterpret_bytes(
+                # Use the destination byte size.
+                # Cast the source pointer so that the count is also the byte size.
+                (Base.unsafe_convert(Ptr{UInt8}, source_ptr), sizeof(dest)),
+                r
+            )
             return r[]
         end
     else
         error("Unexpected bytes destination: ", typeof(dest))
     end
 
+    # @shout "\t\t\t" source_ptr " * " source_count "   to " dest ": " source_byte_count " bytes"
     unsafe_copyto!(Base.unsafe_convert(Ptr{UInt8}, dest),
                    Base.unsafe_convert(Ptr{UInt8}, source_ptr),
                    source_byte_count)
