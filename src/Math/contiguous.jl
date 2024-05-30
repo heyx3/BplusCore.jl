@@ -20,7 +20,7 @@ const ContiguousRaw{T} = Union{
     T,
     SArray{S, T} where {S},
     Vec{N, T} where {N},
-    ConstVector{T}
+    NTuple{N, T} where {N}
 }
 
 "
