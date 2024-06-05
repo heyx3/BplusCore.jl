@@ -577,9 +577,11 @@ end
     V = Vec{N, T}
     return VecRange(convert(V, a), convert(V, b), one(V))
 end
-@inline function Base.:(:)(a::Vec, step::Vec, b::Vec)
+@inline function Base.:(:)(a::Vec{N, T1}, step::Vec{N, T2}, b::Vec{N, T3}) where {N, T1, T2, T3}
     @bp_check(none(iszero, step), "Iterating with a step size of 0: ", step)
-    VecRange(a, b, step)
+    T = promote_type(eltype(a), eltype(b), eltype(step))
+    V = Vec{N, T}
+    VecRange(convert(V, a), convert(V, b), convert(V, step))
 end
 
 # Support mixing single values with vectors.
