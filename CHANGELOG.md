@@ -1,3 +1,7 @@
+# v0.2.1
+
+* Automatic type conversion when using `Vec` in a colon operator (a.k.a. a range)
+
 # v0.2.0
 
 * Add `TrueOrdering`, and `true_order` for `vsize()`, so vectors can index arrays more intuitively if desired
