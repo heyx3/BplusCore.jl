@@ -113,12 +113,12 @@ end
 function m_apply_vector(m::Mat{4, 4, F1}, v::Vec{3, F2}) where {F1, F2}
     v4::Vec{4, F2} = vappend(v, zero(F2))
     u4::Vec{4, promote_type(F1, F2)} = m * v4
-    return u4.xyz / u4.w
+    return iszero(u4.w) ? u4.xyz : (u4.xyz / u4.w)
 end
 function m_apply_vector(m::Mat{3, 3, F1}, v::Vec{2, F2}) where {F1, F2}
     v3::Vec{3, F2} = vappend(v, zero(F2))
     u3::Vec{3, promote_type(F1, F2)} = m * v3
-    return u3.xy / u3.z
+    return iszero(u3.z) ? u3.xy : (u3.xy / u3.z)
 end
 m_apply_vector(m::Mat{N, N}, v::Vec{N}) where {N} = m * v
 "
