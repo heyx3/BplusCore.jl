@@ -303,6 +303,32 @@ function Base.append!(s::AbstractSet{T}, new_items) where {T}
     return s
 end
 
+"
+An iterator that runs your lambda, passing it an index, until you return `nothing` instead of `Some{T}`.
+Each element you return is then an element of this iterator.
+
+If you know the type of elements being emitted, you can specify it to help type-inference.
+"
+struct IterSome{Lambda, ElType}
+    lambda::Lambda
+
+    @inline IterSome(lambda, el_type=Any) = new{typeof(lambda), el_type}(lambda)
+end
+Base.iterate(is::IterSome) = iterate(is, 1)
+Base.iterate(is::IterSome{L, E}, next_idx::Int) where {L, E} = let el = is.lambda(next_idx)
+    if isnothing(el)
+        nothing
+    elseif el isa Some
+        tuple(something(el)::E, next_idx + 1)
+    else
+        error("You should return either `nothing` or `Some{T}`. Wrap your value in `Some(t)`!")
+    end
+end
+Base.IteratorSize(::IterSome) = Base.SizeUnknown()
+Base.IteratorEltype(::IterSome{L, E}) where {L, E} = (E == Any) ? Base.EltypeUnknown() : Base.HasEltype()
+Base.eltype(::IterSome{L, E}) where {L, E} = E
+export IterSome
+
 
 "
 Provides a do-while loop for Julia.

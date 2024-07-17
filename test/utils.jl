@@ -306,6 +306,12 @@ const IS = InteropString("abcdef")
 @bp_test_no_allocations(@view(IS.c_buffer[1:5]),
                         vcat(codeunits("1234"), 0))
 
+# Test IterSome
+@bp_test_no_allocations(Tuple(IterSome(i -> (i>3) ? nothing : Some(i))), (1, 2, 3))
+    # No manual type inference provided in the above line, but the compiler should be able to deduce it.
+@bp_test_no_allocations(Tuple(IterSome(i -> nothing, Float64)), ())
+@bp_test_no_allocations(Tuple(IterSome(i -> (i > 4) ? nothing : Some(Float64(i)), Float64)), (1.0, 2.0, 3.0, 4.0))
+
 # Test union type wrangling:
 #TODO: Why was @assert used here? Switch to @bp_check
 @assert union_types(Float32) == (Float32, )

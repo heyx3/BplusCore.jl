@@ -1,7 +1,8 @@
 # v0.2.1
 
+* Add `IterSome` to enumerate an unknown number of elements with a lambda
 * Automatic type conversion when using `Vec` in a colon operator (a.k.a. a range)
-* Fix small bugs in `Vec` stuff
+* Fix other bugs in `Vec` stuff
 
 # v0.2.0
 
