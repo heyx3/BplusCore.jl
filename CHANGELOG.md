@@ -1,10 +1,7 @@
-# v0.2.2
-
-* Fix small bugs in `Vec` stuff
-
 # v0.2.1
 
 * Automatic type conversion when using `Vec` in a colon operator (a.k.a. a range)
+* Fix small bugs in `Vec` stuff
 
 # v0.2.0
 
