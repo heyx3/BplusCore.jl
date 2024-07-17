@@ -531,14 +531,15 @@ Base.:(<=)(a::Vec{N, T}, b::Vec{N, T2}) where {N, T, T2} = Vec((i<=j for (i,j) i
 Base.:(<=)(a::Vec{N, T}, b::T2) where {N, T, T2} = map(x -> x<=b, a)
 Base.:(<=)(a::T2, b::Vec{N, T}) where {N, T, T2} = map(x -> a<=x, b)
 
-for bitwise_expr in [ :&, :|, :⊻, :⊼, :!, :<<, :>> ]
+for bitwise_expr in [ :&, :|, :⊻, :⊼, :<<, :>> ]
     @eval begin
-        Base.$bitwise_expr(a::Vec{N}, b::Vec{N}) where {N} =
+        @inline Base.$bitwise_expr(a::Vec{N}, b::Vec{N}) where {N} =
             Vec(($bitwise_expr(i, j) for (i, j) in zip(a, b))...)
-        Base.$bitwise_expr(a::Vec, b) = map(x -> $bitwise_expr(x, b), a)
-        Base.$bitwise_expr(a, b::Vec) = map(x -> $bitwise_expr(a, x), b)
+        @inline Base.$bitwise_expr(a::Vec, b) = map(x -> $bitwise_expr(x, b), a)
+        @inline Base.$bitwise_expr(a, b::Vec) = map(x -> $bitwise_expr(a, x), b)
     end
 end
+@inline Base.:(!)(a::VecB) = map(!, a)
 
 
 #######################
@@ -866,10 +867,59 @@ export v_is_normalized
 Like a binary version of lerp, or like `step()`.
 Returns components of `a` when `t` is false, or `b` when `t` is true.
 "
-vselect(a::F, b::F, t::Bool) where {F} = (t ? b : a)
-vselect(a::Vec{N, T}, b::Vec{N, T}, t::Vec{N}) where {N, T} = Vec{N, T}((
-    vselect(xA, xB, xT) for (xA, xB, xT) in zip(a, b, t)
-)...)
+@inline function vselect(a, b, t)
+    # Special simple-case: if a, b, and t are all scalars,
+    #    skip the Vec stuff.
+    if !isa(a, Vec) && !isa(b, Vec) && !isa(t, Vec)
+        a₂, b₂ = promote(a, b)
+        return convert(Bool, t) ? b₂ : a₂
+    end
+
+    # Turn scalars into 1D vectors.
+    if !isa(a, Vec)
+        return vselect(Vec(a), b, t)
+    elseif !isa(b, Vec)
+        return vselect(a, Vec(b), t)
+    elseif !isa(t, Vec)
+        return vselect(a, b, Vec(t))
+    end
+
+    # Homogenize the component types of a and b.
+    Fa = eltype(a)
+    Fb = eltype(b)
+    F = promote_type(Fa, Fb)
+    if Fa != F
+        return vselect(map(f -> convert(F, f), a), b, t)
+    elseif Fb != F
+        return vselect(a, map(f -> convert(F, f), b), t)
+    end
+
+    # Convert t's components to Bool.
+    Ft = eltype(t)
+    if Ft != Bool
+        return vselect(a, b, map(f -> convert(Bool, f), t))
+    end
+
+    # Turn 1D vectors into ND vectors.
+    N = max(length(a), length(b), length(t))
+    if N > 1
+        if length(a) == 1
+            return vselect(Vec{N, eltype(a)}(i->a.x), b, t)
+        elseif length(b) == 1
+            return vselect(a, Vec{N, eltype(b)}(i->b.x), t)
+        elseif length(t) == 1
+            return vselect(a, b, Vec{N, eltype(t)}(i->t.x))
+        end
+    end
+
+    @bp_math_assert(eltype(a) == F)
+    @bp_math_assert(typeof(a) == typeof(b))
+    @bp_math_assert(t isa VecB)
+    @bp_math_assert(length(a) == N)
+    @bp_math_assert(length(b) == N)
+    @bp_math_assert(length(t) == N)
+    return Vec{N, F}(i -> t[i] ? b[i] : a[i])
+end
 
 "Converts a multidimensional array index to a flat one, assuming X is the innermost component"
 function vindex(p::Vec{N, <:Integer}, size::Vec{N, <:Integer}) where {N}

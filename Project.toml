@@ -1,7 +1,7 @@
 name = "BplusCore"
 uuid = "1fb136ff-715c-473e-9ae1-0caef0ff09b1"
 authors = ["William Mishra-Manning <manning.w27@gmail.com>"]
-version = "0.2.1"
+version = "0.2.2"
 
 [deps]
 BitFlags = "d1d4a3ce-64b1-5f1a-9ba4-7e7e69966f35"

@@ -142,8 +142,21 @@ end
                         Vec(false, false, false))
 @bp_test_no_allocations(Vec(true, false, true) & true,
                         Vec(true, false, true))
+@bp_test_no_allocations(!Vec(false, true, true, false),
+                        Vec(true, false, false, true))
 @bp_test_no_allocations(vselect(Vec(1, 2, 3), Vec(4, 5, 6), Vec(true, false, true)),
                         Vec(4, 2, 6))
+@bp_test_no_allocations(vselect(1, 2, true), 2)
+@bp_test_no_allocations(vselect(Vec(1, 2), 3, true),
+                        Vec(3, 3))
+@bp_test_no_allocations(vselect(3, Vec(1, 2), true),
+                        Vec(1, 2))
+@bp_test_no_allocations(vselect(1, 2, Vec(true, false)),
+                        Vec(2, 1))
+@bp_test_no_allocations(vselect(Vec(1, 2), 3, Vec(false, true)),
+                        Vec(1, 3))
+@bp_test_no_allocations(vselect(1, Vec(2, 3), Vec(false, true)),
+                        Vec(1, 3))
 
 # Test vindex():
 @bp_test_no_allocations(vindex(Vec(2, 3, 4), Vec(5, 6, 7)),
