@@ -205,7 +205,7 @@ end
 function Base.iterate(d::drop_last)
     i1 = iterate(d.iter)
     if isnothing(i1)
-        return nothing
+        error("Can't 'drop_last()' from an empty collection!")
     end
     (element1, state1) = i1
 
@@ -224,13 +224,20 @@ function Base.iterate(d::drop_last, (next_element, next_state))
     end
     return (next_element, next_iter)
 end
-Base.IteratorSize(d::drop_last) = Base.IteratorSize(d.iter)
+function Base.IteratorSize(d::drop_last)
+    size_type = Base.IteratorSize(d.iter)
+    # To drop the last element from a multidimensional collection,
+    #    we have to drop the last corner element,
+    #    which means dropping the multidimensional shape.
+    if size_type isa Base.HasShape
+        return Base.HasLength()
+    else
+        return size_type
+    end
+end
 Base.IteratorEltype(d::drop_last) = Base.IteratorEltype(d.iter)
 Base.eltype(d::drop_last) = Base.eltype(d.iter)
-Base.length(d::drop_last) = Base.length(d.iter) - 1
-Base.size(d::drop_last, dim...) = let s = Base.size(d.iter, dim...)
-    (s isa Tuple) ? (s .- 1) : (s - 1)
-end
+Base.length(d::drop_last) = length(d.iter) - 1
 export drop_last
 
 "

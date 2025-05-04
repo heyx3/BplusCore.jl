@@ -54,7 +54,10 @@ do_append() = append(UpTo{2, Int}((1, )),
                         reduce(*, 2:2:10))
 
 # Test drop_last()
-@bp_check(collect(drop_last(1:0)) == [ ])
+try
+    print(collect(drop_last(1:0)))
+    error("Should have failed to drop_last() from an empty collection!")
+catch e; end
 @bp_check(collect(drop_last(1:1)) == [ ])
 @bp_check(collect(drop_last(1:10)) == collect(1:9))
 

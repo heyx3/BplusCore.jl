@@ -630,6 +630,7 @@ Base.size(r::TVecRange) where {TVecRange<:VecRange} = tuple(
     (length(a:step:b) for (a, b, step) in zip(r.a, r.b, r.step))...
 )
 Base.length(r::VecRange) = prod(size(r))
+Base.axes(r::VecRange) = Base.OneTo.(size(r))
 
 # The iteration algorithm is recursive, with a type parameter for the axis being incremented.
 @inline function Base.iterate(r::VecRange)

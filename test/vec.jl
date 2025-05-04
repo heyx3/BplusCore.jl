@@ -678,7 +678,7 @@ end
 # Test map!() on a range of coordinates, which invokes several helper functions that I had to overload.
 const MAP_RANGE = 1:v2i(2, 3)
 map_data::Vector{v2i} = fill(zero(v2i), prod(last(MAP_RANGE)))
-map!(v -> v*10, map_data, 1:v2i(2, 3))
+map!(v -> v*10, map_data, collect(1:v2i(2, 3)))
 @bp_check(map_data == [ v2i(10, 10), v2i(20, 10),
                         v2i(10, 20), v2i(20, 20),
                         v2i(10, 30), v2i(20, 30) ],
