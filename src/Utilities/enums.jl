@@ -3,7 +3,11 @@
 "
 Anonymous enums, implemented with Val.
 A stricter alternative to passing symbols as parameters.
+
 `@ano_enum(ABC, DEF, GHI) == Union{Val{:ABC}, Val{:DEF}, Val{GHI}}`
+
+Create a value of this pseudo-enum with `@ano_value(ABC)`.
+
 Note that this creates some overhead if the user can't construct the Val at compile-time.
 "
 macro ano_enum(args::Symbol...)
@@ -11,6 +15,7 @@ macro ano_enum(args::Symbol...)
     arg_exprs = map(s -> :(Val{Symbol($s)}), arg_names)
     return :( Union{$(arg_exprs...)} )
 end
+"Create an element of an 'anonymous enum'; see `@ano_enum()`"
 macro ano_value(v)
     return :( Val($(QuoteNode(v))) )
 end

@@ -181,19 +181,41 @@ end
 "Creates a box given a size and *inclusive* max"
 @inline Box(data::Union{NamedTuple{(:max, :size)}, NamedTuple{(:size, :max)}}) =
     Box(box_typenext(data.max) - data.size, data.size)
-"Creates a box given a center and size"
-@inline function Box(data::Union{NamedTuple{(:center, :size)}, NamedTuple{(:size, :center)}})
+"
+Creates a box given a center and size (and a choice between integer and float division).
+If using integer division and an even size, the center value is put on the max half of the range.
+"
+@inline function Box(data::Union{NamedTuple{(:center, :size)}, NamedTuple{(:size, :center)}},
+                     division_mode::Optional{@ano_enum(Int, Float)})
     component_type = promote_type(
         (data.center isa Vec) ? eltype(data.center) : typeof(data.center),
         (data.size isa Vec) ? eltype(data.size) : typeof(data.size)
     )
-    half_size = data.size / convert(component_type, 2)
+
+    half_size = if division_mode == @ano_value(Int)
+        data.size ÷ convert(component_type, 2)
+    elseif division_mode == @ano_value(Float)
+        data.size / convert(component_type, 2)
+    else
+        error("Unhandled division mode: ", val_type(division_mode))
+    end
+
     return Box(data.center - half_size, data.size)
 end
+@inline function Box(data::Union{NamedTuple{(:center, :size)}, NamedTuple{(:size, :center)}})
+    T = (data.center isa Vec) ? eltype(data.center) : typeof(data.center)
+    division_mode = if T isa Integer
+        @ano_value(Int)
+    else
+        @ano_value(Float)
+    end
+    return Box(data, division_mode)
+end
 @inline Box{N, F}(data::NamedTuple) where {N, F} = convert(Box{N, F}, Box(data))
+@inline Box{N, F}(division_mode::Val, data::NamedTuple) where {N, F} = convert(Box{N, F}, Box(division_mode, data))
 
 # Forward keyword arguments to the above constructors.
-@inline Box(; kw...) = Box(namedtuple(keys(kw), values(kw)))
+@inline Box(a...; kw...) = Box(namedtuple(keys(kw), values(kw)), a...)
 @inline Box{N, F}(; kw...) where {N, F} = isempty(kw) ?
                                               Box{N, F}(zero(Vec{N, F}), zero(Vec{N, F})) :
                                               Box{N, F}(namedtuple(kw))
@@ -365,15 +387,21 @@ export Interval, IntervalI, IntervalU, IntervalF, IntervalD
 
 # Re-implement box stuff for interval.
 # Where a Box function would return a Vec1, return a scalar instead.
-@inline Interval(; kw...) = let ks=keys(kw),
-                                vs=values(kw)
+@inline Interval(a...; kw...) = let ks=keys(kw),
+                                    vs=values(kw)
     boxed_vs = tuple((Vec(v) for v in vs)...)
     boxed_params = namedtuple(ks, boxed_vs)
-    return Interval(Box(boxed_params))
+    return Interval(Box(boxed_params, a...))
 end
 @inline Interval{F}(; kw...) where {F} = convert(Interval{F}, Interval(; kw...))
 @inline Interval(inputs::NamedTuple) = Interval(; inputs...)
 @inline Interval{F}(inputs::NamedTuple) where {F} = Interval{F}(; inputs...)
+# Versions of the above 3 for the center+size named tuple:
+#   =====
+@inline Interval{F}(division_mode::Val; kw...) where {F} = convert(Interval{F}, Interval(division_mode; kw...))
+@inline Interval(division_mode, inputs::NamedTuple) = Interval(division_mode; inputs...)
+@inline Interval{F}(division_mode, inputs::NamedTuple) where {F} = Interval{F}(division_mode; inputs...)
+#   =====
 @inline Interval(r::UnitRange) = Interval(Box(min=Vec(first(r)), max=Vec(last(r))))
 Base.convert(::Type{Box{1, F1}}, i::Interval{F2}) where {F1, F2} = Box(min=Vec{1, F1}(min_inclusive(i)),
                                                                        max=Vec{1, F1}(max_inclusive(i)))

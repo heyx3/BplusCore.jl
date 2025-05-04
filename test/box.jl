@@ -2,13 +2,15 @@
 @bp_test_no_allocations(Box{2, Int32}(), Box(v2f(), v2u()))
 @bp_test_no_allocations(Box(Vec(1):Vec(20)), Box(Vec(1), Vec(20)))
 @bp_test_no_allocations(Box(1:Vec(21, 43)), Box(Vec(1, 1), Vec(21, 43)))
-@bp_test_no_allocations(Box((min=Vec(3, 4), max=Vec(4, 10))),
+@bp_test_no_allocations(Box(min=Vec(3, 4), max=Vec(4, 10)),
                         Box2D{Int}(Vec(3, 4), Vec(2, 7)))
-@bp_test_no_allocations(Box((min=Vec(3, 4), size=Vec(4, 10))),
+@bp_test_no_allocations(Box(min=Vec(3, 4), size=Vec(4, 10)),
                         Box2D{Int}(Vec(3, 4), Vec(4, 10)))
-@bp_test_no_allocations(Box((max=Vec(3, 4), size=Vec(2, 3))),
+@bp_test_no_allocations(Box(max=Vec(3, 4), size=Vec(2, 3)),
                         Box(Vec(2, 2), Vec(2, 3)))
-@bp_test_no_allocations(Box((center=Vec(2, 2), size=Vec(4, 4))),
+@bp_test_no_allocations(Box(@ano_value(Float), center=Vec(2, 2), size=Vec(4, 4)),
+                        Box(Vec(0, 0), Vec(4, 4)))
+@bp_test_no_allocations(Box(@ano_value(Int), center=Vec(2, 2), size=Vec(4, 4)),
                         Box(Vec(0, 0), Vec(4, 4)))
 @bp_test_no_allocations(boundary(Vec(2, 3)),
                         Box(Vec(2, 3), Vec(1, 1)))
@@ -136,6 +138,10 @@
                         Interval(min=5, size=6))
 @bp_test_no_allocations(Interval{Float64}(min=5, max=10),
                         Interval{Float64}(min=5, size=6))
+@bp_test_no_allocations(Interval(@ano_value(Int), center=2, size=4),
+                        Interval{Int}(min=0, max=3))
+@bp_test_no_allocations(Interval(@ano_value(Int), center=2, size=5),
+                        Interval{Int}(min=0, max=4))
 const TEST_INTERVAL = Interval(min=1.5, size=10)
 @bp_test_no_allocations(typeof(TEST_INTERVAL), Interval{Float64})
 @bp_test_no_allocations(min_inclusive(TEST_INTERVAL), 1.5)

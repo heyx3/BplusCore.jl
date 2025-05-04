@@ -1,3 +1,7 @@
+# v0.3.0
+
+* **[Breaking]** disambiguate the `Box` constructor between integer and float division, when passing a `center` and a `size`. Same for `Interval`
+
 # v0.2.1
 
 * Add `IterSome` to enumerate an unknown number of elements with a lambda
