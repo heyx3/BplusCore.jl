@@ -660,20 +660,6 @@ end
 @bp_test_no_allocations(length(v3i(2, 3, 4):v3i(-1, 1, -1):v3i(1, 5, 1)),
                           2*3*4)
 @bp_test_no_allocations(isempty(v3i(2, 3, 4):v3i(-1, 1, -1):v3i(1, 5, 1)), false)
-let range = v3i(1, 2, 3):Int32(-1):v3i(1, 1, 1)
-    @bp_check(collect(range) ==
-                [
-                    v3i(1, 2, 3),
-                    v3i(1, 1, 3),
-
-                    v3i(1, 2, 2),
-                    v3i(1, 1, 2),
-
-                    v3i(1, 2, 1),
-                    v3i(1, 1, 1)
-                ],
-             "Range ", range, " yielded ", collect(range))
-end
 
 # Test map!() on a range of coordinates, which invokes several helper functions that I had to overload.
 const MAP_RANGE = 1:v2i(2, 3)
@@ -691,6 +677,31 @@ for _ in 1:100
     val = rand(range)
     @bp_test_no_allocations(val in range, true,
                             val, " not in ", range)
+end
+
+# Test the multidimensional nature of vec ranges.
+const MULTI_RANGE = 4:v2u(2, 3):10
+@bp_test_no_allocations(size(MULTI_RANGE), (4, 3))
+@bp_test_no_allocations(length(MULTI_RANGE), 4*3)
+@bp_check(collect(MULTI_RANGE) == [
+    v2u(4, 4)   v2u(4, 7)   v2u(4, 10)
+    v2u(6, 4)   v2u(6, 7)   v2u(6, 10)
+    v2u(8, 4)   v2u(8, 7)   v2u(8, 10)
+    v2u(10, 4)  v2u(10, 7)  v2u(10, 10)
+], collect(MULTI_RANGE))
+let range = v3i(1, 2, 3):Int32(-1):v3i(1, 1, 1),
+    flat_array = collect(Iterators.flatten(range))
+    @bp_check(flat_array == [
+                1, 2, 3,
+                1, 1, 3,
+
+                1, 2, 2,
+                1, 1, 2,
+
+                1, 2, 1,
+                1, 1, 1
+             ],
+             "Range ", range, " yielded ", flat_array)
 end
 
 # Test Ref/Ptr conversions:

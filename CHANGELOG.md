@@ -1,6 +1,8 @@
 # v0.3.0
 
 * **[Breaking]** disambiguate the `Box` constructor between integer and float division, when passing a `center` and a `size`. Same for `Interval`
+* **[Breaking]** fix iteration over integer `Vec` ranges (e.g. `1:v2u(1920, 1080))`); now they are multidimensional as well.
+* Fix bugs with iteration utilities `drop_last()` and `iter_join()`
 
 # v0.2.1
 

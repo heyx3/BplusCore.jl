@@ -14,7 +14,9 @@ For example, `Vec{UInt8}(128, 4, 200).rgb∆` results in `Vec{UInt8}(128, 4, 200
 `Vec` has an efficient implementation of `AbstractVector`, including `map`, `foldl`, etc,
   except for broadcasting because I don't know how to do it yet.
 
-You can use the colon operator to iterate between two values (e.x. `Vec(1, 1) : Vec(10, 10)`).
+You can use the colon operator to iterate between two values (e.x. `Vec(1, 1) : Vec(10, 10)`),
+    or treat it as a multidimensional iterator.
+Note that using `Iterators.flatten()` on a `Vec` range will flatten it into its individual components!
 
 To change how many digits are printed in the REPL and `Base.show()`,
   set `VEC_N_DIGITS` or call `use_vec_digits() do ... end`.
@@ -594,13 +596,18 @@ Base.:(:)(a::Number, step::Number, b::Vec) = typeof(b)(i->a) : typeof(b)(i->step
 Base.:(:)(a::Number, step::Vec, b::Number) = typeof(step)(i->a) : step : typeof(step)(i->b)
 Base.:(:)(a::T, step::Vec, b::T) where {T<:Real} = typeof(step)(i->a) : step : typeof(step)(i->b)
 
-@inline Base.in(v::Vec{N, T2}, r::VecRange{N, T}) where {N, T, T2} = all(tuple(
-    (v[i] in r.a[i]:r.step[i]:r.b[i]) for i in 1:N
-)...)
-@inline Base.in(v::Vec{N, T}, range::AbstractRange) where {N, T} = all(tuple(
-    (v_ in range) for v_ in v
-)...)
+Base.IteratorSize(::Type{<:VecRange{N}}) where {N} = Base.HasShape{N}()
+Base.size(r::VecRange) = tuple(
+    (length(a:step:b) for (a, b, step) in zip(r.a, r.b, r.step))...
+)
+
+Base.IteratorEltype(::Type{<:VecRange}) = Base.HasEltype()
 Base.eltype(::VecRange{N, T}) where {N, T} = T
+
+Base.length(r::VecRange) = prod(size(r))
+
+# collect() for ranges is forced to 1D; we need to override that.
+Base.collect(r::VecRange) = map(identity, r)
 
 function Base.getindex(v::VecRange{N, T}, i::Integer) where {N, T}
     # Copied and modified from the implementation for `AbstractRange`.
@@ -612,6 +619,12 @@ function Base.getindex(v::VecRange{N, T}, i::Integer) where {N, T}
     @boundscheck (all(i_per_axis > 0) & (i_per_axis <= axis_count)) || Base.throw_boundserror(v, i)
     return first(v) + ((i_per_axis - 1) * step(v))
 end
+@inline Base.in(v::Vec{N, T2}, r::VecRange{N, T}) where {N, T, T2} = all(tuple(
+    (v[i] in r.a[i]:r.step[i]:r.b[i]) for i in 1:N
+)...)
+@inline Base.in(v::Vec{N, T}, range::AbstractRange) where {N, T} = all(tuple(
+    (v_ in range) for v_ in v
+)...)
 
 function Random.rand(rng::Random.AbstractRNG, range::VecRange{N, T}) where {N, T}
     rand_along_axis(i) = rand(rng, range.a[i]:range.step[i]:range.b[i])
@@ -625,12 +638,6 @@ Base.step(r::TVecRange) where {TVecRange<:VecRange} = r.step
 Base.isempty(r::TVecRange) where {TVecRange<:VecRange} = any(
     isempty(a:step:b) for (a, b, step) in zip(r.a, r.b, r.step)
 )
-
-Base.size(r::TVecRange) where {TVecRange<:VecRange} = tuple(
-    (length(a:step:b) for (a, b, step) in zip(r.a, r.b, r.step))...
-)
-Base.length(r::VecRange) = prod(size(r))
-Base.axes(r::VecRange) = Base.OneTo.(size(r))
 
 # The iteration algorithm is recursive, with a type parameter for the axis being incremented.
 @inline function Base.iterate(r::VecRange)
