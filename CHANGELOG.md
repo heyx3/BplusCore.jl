@@ -1,3 +1,7 @@
+# v.0.3.1
+
+* **[Breaking]** Update `round()` for `Vec` instances because julia 1.11 overload resolution made it impossible :(
+
 # v0.3.0
 
 * **[Breaking]** disambiguate the `Box` constructor between integer and float division, when passing a `center` and a `size`. Same for `Interval`

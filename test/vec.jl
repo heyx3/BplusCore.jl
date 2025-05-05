@@ -129,6 +129,10 @@ end
 @bp_test_no_allocations(Vec(5, 4, 3, 2, 1) ÷ Vec(1, 2, 3, 4, 5), Vec(5, 2, 1, 0, 0))
 @bp_test_no_allocations(-Vec(2, -3, 4, -5, 6, -7), Vec(-2, 3, -4, 5, -6, 7))
 
+# Test rounding (which has tricky overload resolution)
+@bp_test_no_allocations(round(Vec(2.4, 0.9)), Vec(2.0, 1.0))
+@bp_test_no_allocations(round(v2i, Vec(2.4, 0.9)), Vec(2, 1))
+
 # Test boolean vector operations.
 @bp_test_no_allocations(Vec(true, false) | Vec(false, true),
                         Vec(true, true))
