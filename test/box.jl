@@ -111,6 +111,20 @@
                                   Box(Vec(10, -5):Vec(23, 100))),
                         Box(Vec(10, 1):Vec(23, 40)))
 
+# Test box_indices().
+@bp_test_no_allocations_setup(
+    arr::Matrix{Float64} = [ 3.0  6.0  7.0
+                             1.4  3.1  -1.0 ],
+    box_indices(arr, Int32),
+    Box{2, Int32}(min=Vec(1, 1), max=Vec(2, 3))
+)
+@bp_test_no_allocations_setup(
+    arr::Matrix{Float64} = [ 3.0  6.0  7.0
+                             1.4  3.1  -1.0 ],
+    box_indices(arr, UInt16, true_order=true),
+    Box{2, UInt16}(min=Vec(1, 1), max=Vec(3, 2))
+)
+
 # Test corners().
 @bp_test_no_allocations(corners(Box(min=Vec(2, 3, 4), max=Vec(6, 7, 8))),
                         tuple(

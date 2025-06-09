@@ -1,8 +1,9 @@
 "
 An axis-aligned bounding box of some number of dimensions.
 
-Can be deserialized through StructTypes using almost any pair of properties --
+Can be constructed (and deserialized through StructTypes) using almost any pair of properties --
    'min' + 'size'; 'min' + 'max'; 'max' + 'size'; 'center' + 'size', etc.
+Note that 'max' here is inclusive.
 "
 struct Box{N, F} <: AbstractShape{N, F}
     min::Vec{N, F}
@@ -345,6 +346,24 @@ function corners(b::Box{N, T})::NTuple{2^N, Vec{N, T}} where {N, T}
     return Tuple(vselect(b_min, b_max, Vec(t...)) for t in corner_flags)
 end
 export corners
+
+"
+Gets a box covering all valid indices of the given array.
+
+If you pass `true_order=true`, then the components will be reversed,
+    so that for example `y` measures the number of rows in a 2D array rather than columns.
+Also see `TrueOrdering`.
+"
+function box_indices(a::Array{<:Any, N}, ::Type{I} = Int
+                     ; true_order::Bool = false
+                    ) where {N, I<:Integer}
+    V = Vec{N, I}
+    return Box{N, I}(
+        min=one(V),
+        max=vsize(a, I, true_order=true_order)
+    )
+end
+export box_indices
 
 Base.rand(rng::Random.AbstractRNG, box::BoxT{<:Integer}) = let a = min_inclusive(box),
                                                                b = max_inclusive(box)
