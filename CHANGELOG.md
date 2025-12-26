@@ -1,4 +1,8 @@
-# v.0.3.1
+# v.0.3.2
+
+* Add `get_something()` to help working with `Optional` values
+
+# v0.3.1
 
 * **[Breaking]** Update `round()` for `Vec` instances because julia 1.11 overload resolution made it impossible :(
 * Add `box_indices(array, I=Int)` to get a `Box` covering an array.

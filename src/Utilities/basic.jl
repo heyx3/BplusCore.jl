@@ -2,7 +2,9 @@
 const Optional{T} = Union{T, Nothing}
 "Checks whether an object is not `nothing`"
 @inline exists(x) = !isnothing(x)
-export Optional, exists
+"Returns `a` unless it is nothing, in which case returns `b`"
+@inline get_something(a::Optional, b) = isnothing(a) ? b : a
+export Optional, exists, get_something
 
 
 "The inverse of `any(args...)`"
