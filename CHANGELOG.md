@@ -1,5 +1,6 @@
 # v.0.3.2
 
+* Add `Curve{T}`, for animation curves
 * Add `get_something()` to help working with `Optional` values
 
 # v0.3.1

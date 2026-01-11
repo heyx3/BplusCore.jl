@@ -20,5 +20,6 @@ include("shapes/Shapes.jl")
 include("transformations.jl")
 include("random_distributions.jl")
 include("noise.jl")
+include("curves.jl")
 
 end # module
