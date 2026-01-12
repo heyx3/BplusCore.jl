@@ -238,12 +238,12 @@ mutable struct Curve{T}
     keyframes::Vector{CurveKey{T}}
     perlin_settings::CurvePerlin
 
-    Curve(keyframes_to_be_copied::Vector{CurveKey{T}}, perlin_settings = CurvePerlin()) where {T} =
-        let c = new{T}(copy(keyframes_to_be_copied), perlin_settings)
+    Curve(keyframes_to_be_copied::AbstractVector{CurveKey{T}}, perlin_settings = CurvePerlin()) where {T} =
+        let c = new{T}(collect(keyframes_to_be_copied), perlin_settings)
             curve_sanitize!(c)
             c
         end
-    Curve{T}(keyframes_to_be_copied::Vector{<:CurveKey}, perlin_settings = CurvePerlin()) where {T} =
+    Curve{T}(keyframes_to_be_copied::AbstractVector{<:CurveKey}, perlin_settings = CurvePerlin()) where {T} =
         let c = new{T}(collect(CurveKey{T}, keyframes_to_be_copied), perlin_settings)
             curve_sanitize!(c)
             c
