@@ -384,3 +384,25 @@ for type64 in union_types(Scalar64)
     test_binary_print(0x0000000000, type64, true,
                       "0b0000000000000000000000000000000000000000000000000000000000000000")
 end
+
+# Test wraparound():
+@bp_test_no_allocations(round(wraparound(-1.0, 2.0,   -1.0), digits=10), -1.0)
+@bp_test_no_allocations(round(wraparound(-1.0, 2.0,   0.2), digits=10), 0.2)
+@bp_test_no_allocations(round(wraparound(-1.0, 2.0,   1.2), digits=10), 1.2)
+@bp_test_no_allocations(round(wraparound(-1.0, 2.0,   -0.2), digits=10), -0.2)
+@bp_test_no_allocations(round(wraparound(-1.0, 2.0,   -1.2), digits=10), 1.8)
+@bp_test_no_allocations(round(wraparound(-1.0, 2.0,   2.2), digits=10), -0.8)
+for range::NTuple{2, Int} in [(-5, 2), (2, -5)]
+    @bp_test_no_allocations(wraparound(range...,   -5),
+                            (range == (-5, 2)) ? -5 : 2)
+    @bp_test_no_allocations(wraparound(range...,   -3), -3)
+    @bp_test_no_allocations(wraparound(range...,   1), 1)
+    @bp_test_no_allocations(wraparound(range...,   2),
+                            (range == (-5, 2) ? -5 : 2))
+    @bp_test_no_allocations(wraparound(range...,   -6), 1)
+    @bp_test_no_allocations(wraparound(range...,   3), -4)
+    @bp_test_no_allocations(wraparound(range...,   -14), 0)
+    @bp_test_no_allocations(wraparound(range...,   11), -3)
+end
+@bp_test_no_allocations(wraparound(1, 1, 0), 1)
+@bp_test_no_allocations(wraparound(1.0, 1.0, 0.0), 1.0)

@@ -108,3 +108,17 @@ function round_up_to_multiple(value, multiple)
         value + (multiple - remainder)
 end
 export round_up_to_multiple
+
+"
+A very flexible modulo function that takes a min and max range to wrap around.
+When `a` == `b`, it returns `a`.
+
+If you swap the min and max, it acts the same (except that when `x==b`, `a` is always returned).
+"
+wraparound(a, b, x) = let wrap_range = b-a,
+                          # If the data is Int, then mod(i, 0) throws an eror.
+                          safe_range = vselect(wrap_range, one(typeof(a)),
+                                               vequal(wrap_range, zero(typeof(a))))
+    vselect(a + mod(x-a, safe_range), a, vequal(a, b))
+end
+export wraparound

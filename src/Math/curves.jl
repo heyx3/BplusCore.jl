@@ -83,7 +83,6 @@ curve_print(io::IO, b::CurveBezierSlope) = print(io,
 const CurveSlope = Union{CurveLinearSlope, CurveExponentialSlope, CurveBezierSlope}
 
 
-
 ##########################################
 ##    Keyframes
 
@@ -173,6 +172,59 @@ function curve_print(io::IO, k::CurveKey{T}) where {T}
     return nothing
 end
 
+
+#########################################
+##    CurvePerlin
+
+"
+Configures the organic noise added to a `Curve{T}`.
+
+The noise can be configured to fade in at the start of the curve;
+  if the curve does not loop then it also symetrically fades out at the end.
+
+The `scale` is in `t` units, for example a scale of 2 means there are new gradients at `t=0,2,4,...`.
+
+The default constructor turns off the effect by setting strength to 0.
+"
+struct CurvePerlin
+    strength::Float32
+    scale::Float32
+    fade_duration::Float32
+    fade_exponent::Float32
+
+    CurvePerlin(strength=0, scale=0.4,
+                fade_duration = 0.3, fade_exponent = 1.3) = new(strength, scale,
+                                                                fade_duration, fade_exponent)
+end
+
+function curve_perlin_strength(t::Float32, t_start::Float32, t_end::Float32,
+                               settings::CurvePerlin, looping::Bool)
+    t_edge_offset = if looping
+        abs(t - t_start)
+    else
+        min(t - t_start, t_end - t)
+    end
+    window_strength = if settings.fade_duration == 0
+        1.0f0
+    else
+        saturate(inv_lerp(0.0f0, settings.fade_duration, t_edge_offset)) ^
+          settings.fade_exponent
+    end
+
+    return window_strength * settings.strength
+end
+
+curve_perlin_sanitize(p::CurvePerlin)::CurvePerlin = CurvePerlin(
+    max(0.0f0, p.strength),
+    max(0.00000000000000000001f0, p.scale),
+    max(0.0f0, p.fade_duration),
+    max(0.0f0, p.fade_exponent)
+)
+
+
+############################################
+##    Curve{T}
+
 "
 A timed sequence of some `lerp()`-able data.
 Perlin noise can be injected into the time coordinate to make the curve organic and varied each time.
@@ -184,27 +236,26 @@ When modifying the keyframes, it's recommended to call `curve_sanitize!` afterwa
 "
 mutable struct Curve{T}
     keyframes::Vector{CurveKey{T}}
-    perlin_strength::Float32
-    #TODO: perlin window
+    perlin_settings::CurvePerlin
 
-    Curve(keyframes_to_be_copied::Vector{CurveKey{T}}, perlin_strength = 0.0) where {T} =
-        let c = new{T}(copy(keyframes_to_be_copied), perlin_strength)
+    Curve(keyframes_to_be_copied::Vector{CurveKey{T}}, perlin_settings = CurvePerlin()) where {T} =
+        let c = new{T}(copy(keyframes_to_be_copied), perlin_settings)
             curve_sanitize!(c)
             c
         end
-    Curve{T}(keyframes_to_be_copied::Vector{<:CurveKey}, perlin_strength = 0.0) where {T} =
-        let c = new{T}(collect(CurveKey{T}, keyframes_to_be_copied))
+    Curve{T}(keyframes_to_be_copied::Vector{<:CurveKey}, perlin_settings = CurvePerlin()) where {T} =
+        let c = new{T}(collect(CurveKey{T}, keyframes_to_be_copied), perlin_settings)
             curve_sanitize!(c)
             c
         end
 
-    Curve(keys::CurveKey{T}...; perlin_strength::Float32 = 0.0f0) where {T} =
-        let c = new{T}([ keys... ], perlin_strength)
+    Curve(keys::CurveKey{T}...; perlin_settings = CurvePerlin()) where {T} =
+        let c = new{T}([ keys... ], perlin_settings)
             curve_sanitize!(c)
             c
         end
-    Curve{T}(keys::CurveKey...; perlin_strength::Float32 = 0.0f0) where {T} =
-        let c = new{T}([ (convert(CurveKey{T}, k) for k in keys)... ], perlin_strength)
+    Curve{T}(keys::CurveKey...; perlin_settings = CurvePerlin()) where {T} =
+        let c = new{T}([ (convert(CurveKey{T}, k) for k in keys)... ], perlin_settings)
             curve_sanitize!(c)
             c
         end
@@ -213,8 +264,8 @@ end
 function Base.print(io::IO, c::Curve)
     print(io, typeof(c), "(")
 
-    if !iszero(c.perlin_strength)
-        print(io, "perlin=", c.perlin_strength, " ")
+    if !iszero(c.perlin_settings.strength)
+        print(io, "perlin=", c.perlin_settings.strength, " ")
     end
 
     print(io, "[ ")
@@ -232,6 +283,8 @@ end
 
 "If the given curve is malformed, quietly fixes its elements"
 function curve_sanitize!(c::Curve)
+    c.perlin_settings = curve_perlin_sanitize(c.perlin_settings)
+
     # Move keys around so their times are sorted.
     @inline sort!(c.keyframes,
         by=(k -> k.point[1]),
@@ -262,43 +315,67 @@ curve_default_value(T::Type{<:Quaternion}) = T()
 
 "
 Evaluates the curve at the given time.
-If the curve type `T` doesn't define `zero(T)`, then you must provide
+Optionally loops the `t` input around the curve's time range.
+
+If using perlin noise for organic randomization,
+  feed a tuple of RNG seeds in to pick a specific randomized version of the curve.
 "
 function curve_eval(c::Curve{T}, _t,
                     perlin_seeds::Tuple = (0x1, )
+                    ;
+                    looping::Bool = false
                    )::T where {T}
     # Edge-case: no keyframes to interpolate.
     if isempty(c.keyframes)
         return curve_default_value(T)
+    elseif length(c.keyframes) == 1
+        return c.keyframes[1].point[2]
     end
 
     # Sanitize and process 't'.
     t = convert(Float32, _t)
-    if c.perlin_strength != 0
-        offset = lerp(-c.perlin_strength, c.perlin_strength,
-                      perlin(t, perlin_seeds))
-        t += offset
+    if c.perlin_settings.strength != 0
+        p = perlin(t / c.perlin_settings.scale, perlin_seeds)
+        offset = (2.0f0 * p) - 1.0f0
+        t += offset * curve_perlin_strength(t,
+                                            c.keyframes[begin].point[1],
+                                            c.keyframes[end].point[1],
+                                            c.perlin_settings, looping)
+    end
+    if looping
+        t = wraparound(c.keyframes[begin].point[1],
+                       c.keyframes[end].point[1],
+                       t)
     end
 
     # Find the relevant keyframes.
     t_keyframe = CurveKey{T}(t, curve_default_value(T), CurveLinearSlope())
     idx_of_prev = searchsortedlast(c.keyframes, t_keyframe, by=(k->k.point[1]))
-    if idx_of_prev == length(c.keyframes)
-        return c.keyframes[end].point[2]
-    elseif idx_of_prev == 0
-        return c.keyframes[begin].point[2]
+    idx_of_next = idx_of_prev + 1
+    if looping
+        if idx_of_prev == length(c.keyframes)
+            idx_of_next = 1
+        elseif idx_of_prev == 0
+            idx_of_prev = length(c.keyframes)
+        end
+    else
+        if idx_of_prev == length(c.keyframes)
+            return c.keyframes[end].point[2]
+        elseif idx_of_prev == 0
+            return c.keyframes[begin].point[2]
+        end
     end
 
     # Interpolate.
     return curve_slope_eval(c.keyframes[idx_of_prev].slope_to_next,
                             c.keyframes[idx_of_prev].point,
-                            c.keyframes[idx_of_prev+1].point,
+                            c.keyframes[idx_of_next].point,
                             t)
 end
 
-println("#TODO: Add curve-editor to GUI module")
 
+##############################################
 
 export CurveSlope, CurveLinearSlope, CurveExponentialSlope, CurveBezierSlope,
-       CurveKey, Curve,
+       CurveKey, CurvePerlin, Curve,
        curve_sanitize!, curve_eval

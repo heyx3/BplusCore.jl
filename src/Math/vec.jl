@@ -23,6 +23,7 @@ To change how many digits are printed in the REPL and `Base.show()`,
 
 NOTE: Comparing two vectors with `==` or `!=` returns a boolean as expected,
   but other comparisons (`<`, `<=`, `>`, `>=`) return a component-wise result.
+Component-wise equality can be done with `vequal(a, b)`.
 """
 struct Vec{N, T} <: AbstractVector{T}
     data::NTuple{N, T}
@@ -873,8 +874,10 @@ v_is_normalized(v::Vec{N, T}, atol::T2 = 0.0) where {N, T, T2} =
 export v_is_normalized
 
 "
-Like a binary version of lerp, or like `step()`.
+A binary version of lerp, like `step()` or a component-wise ternary operator.
 Returns components of `a` when `t` is false, or `b` when `t` is true.
+
+Also defined for scalars so that you can fully replace ternary operations with this function.
 "
 @inline function vselect(a, b, t)
     # Special simple-case: if a, b, and t are all scalars,
@@ -930,6 +933,25 @@ Returns components of `a` when `t` is false, or `b` when `t` is true.
     return Vec{N, F}(i -> t[i] ? b[i] : a[i])
 end
 
+"Component-wise equality test, also defined for scalars for convenience"
+@inline vequal(a::Union{Vec, Real}, b::Union{Vec, Real})::Union{Vec, Real} = if a isa Real
+        if b isa Real
+            a==b
+        else
+            vequal(Vec(a), b)
+        end
+    elseif b isa Real
+        vequal(a, Vec(b))
+    elseif (length(a) == 1) && (length(b) > 1)
+        vequal(typeof(b)(i->a.x), b)
+    elseif (length(b) == 1 && length(a) > 1)
+        vequal(a, typeof(a)(i->b.x))
+    elseif length(a) != length(b)
+        error("Incompatible comparison of ", length(a), "D to ", length(b), "D")
+    else
+        map(==, a, b)
+    end
+
 "Converts a multidimensional array index to a flat one, assuming X is the innermost component"
 function vindex(p::Vec{N, <:Integer}, size::Vec{N, <:Integer}) where {N}
     if N == 0 # Degenerative case, but technically possible
@@ -964,7 +986,7 @@ Also see `TrueOrdering`.
     s
 end
 
-export vselect, vindex, vsize
+export vselect, vequal, vindex, vsize
 
 
 ##########################

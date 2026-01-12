@@ -1,6 +1,8 @@
 # v.0.3.2
 
 * Add `Curve{T}`, for animation curves
+* Add `wraparound()` for advanced modulo
+* Add `vequal()` for component-wise vector equality
 * Add `get_something()` to help working with `Optional` values
 
 # v0.3.1
