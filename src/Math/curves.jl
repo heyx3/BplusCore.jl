@@ -110,7 +110,7 @@ struct CurveKey{T}
     CurveKey{T}(point::CurveKeyframeCoord, slope_to_next = CurveLinearSlope()) where {T} =
         new{T}((point[1], convert(T, point[2])), slope_to_next)
 end
-Base.convert(T, k::CurveKey{T2}) where {T2} = CurveKey{T}((k.point[1], convert(T, k.point[2])), k.slope_to_next)
+Base.convert(::Type{CurveKey{T}}, k::CurveKey{T2}) where {T, T2} = CurveKey{T}((k.point[1], convert(T, k.point[2])), k.slope_to_next)
 
 function CurveKey{F}(v::Vec{2, F2}, slope_to_next = CurveLinearSlope()) where {F<:Real, F2}
     return CurveKey{F}(convert(Float32, v.x),
