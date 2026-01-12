@@ -249,12 +249,12 @@ mutable struct Curve{T}
             c
         end
 
-    Curve(keys::CurveKey{T}...; perlin_settings = CurvePerlin()) where {T} =
+    Curve(keys::CurveKey{T}...; perlin_settings::CurvePerlin = CurvePerlin()) where {T} =
         let c = new{T}([ keys... ], perlin_settings)
             curve_sanitize!(c)
             c
         end
-    Curve{T}(keys::CurveKey...; perlin_settings = CurvePerlin()) where {T} =
+    Curve{T}(keys::CurveKey...; perlin_settings::CurvePerlin = CurvePerlin()) where {T} =
         let c = new{T}([ (convert(CurveKey{T}, k) for k in keys)... ], perlin_settings)
             curve_sanitize!(c)
             c
