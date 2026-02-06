@@ -82,11 +82,9 @@ For example:
     if source isa Tuple{Ptr, Integer}
         # Continue past these if statements
     elseif source isa Ref
-        # @shout "\t" typeof(source)
         return reinterpret_bytes((source, 1), dest)
     elseif source isa Tuple{Ref, Integer}
         (source_r, source_count) = source
-        # @shout "\t" typeof(source_r) " * " source_count
         @bp_check(isbitstype(eltype(source_r)),
                   "Byte data source isn't a bitstype: Ref of ", eltype(source_r))
         GC.@preserve source_r begin
@@ -99,14 +97,12 @@ For example:
             @bp_check(Base.iscontiguous(source),
                       "Byte data source isn't a contiguous array: ", typeof(source))
         end
-        # @shout "\t [.." length(source) " of " eltype(source) "..]"
         let r = Ref(source, 1)
             GC.@preserve r begin
                 return reinterpret_bytes((Base.unsafe_convert(Ptr{eltype(source)}, r), length(source)), dest)
             end
         end
     elseif isbitstype(typeof(source))
-        # @shout "\t Bits<" typeof(source) ">"
         return reinterpret_bytes(Ref(source), dest)
     else
         error("Byte source data isn't a bitstype: ", typeof(source))
@@ -117,7 +113,6 @@ For example:
     # Get the destination into a pointer representation.
     if dest isa AbstractArray
         dest_byte_count = length(dest) * sizeof(eltype(dest))
-        # @shout "\t\t" eltype(dest) " * " length(dest) " == " dest_byte_count
         @bp_check(isbitstype(eltype(dest)),
                   "Byte data destination isn't a bitstype: array of ", eltype(dest))
         @bp_check(dest_byte_count >= source_byte_count,
@@ -130,14 +125,12 @@ For example:
     elseif dest isa Ptr
         # Continue past these if statements
     elseif dest isa Ref
-        # @shout "\t\t" typeof(dest)
         @bp_check(isbitstype(eltype(dest)),
                   "Byte data destination isn't a bitstype: Ref of ", eltype(dest))
         GC.@preserve dest begin
             return reinterpret_bytes(source, Base.unsafe_convert(Ptr{eltype(dest)}, dest))
         end
     elseif dest isa DataType
-        # @shout "\t\tBits<" dest ">"
         @bp_check(isbitstype(dest), "Byte data destination type isn't a bitstype: ", dest)
         @bp_check(sizeof(dest) <= source_byte_count,
                   "Byte data destination type (", dest, ") is ", sizeof(dest),
@@ -155,7 +148,6 @@ For example:
         error("Unexpected bytes destination: ", typeof(dest))
     end
 
-    # @shout "\t\t\t" source_ptr " * " source_count "   to " dest ": " source_byte_count " bytes"
     unsafe_copyto!(Base.unsafe_convert(Ptr{UInt8}, dest),
                    Base.unsafe_convert(Ptr{UInt8}, source_ptr),
                    source_byte_count)

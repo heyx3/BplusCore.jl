@@ -13,13 +13,12 @@ Smooth interpolation: a non-linear version of lerp
 Unlike lerp(), this function clamps t to the range (0, 1),
     as its behavior outside this range is not intuitive.
 """
-@inline function smoothstep(t::TVec) where {TVec<:Vec}
-    t = clamp(t, zero(TVec), one(TVec))
-    THREE = TVec(Val(3))
-    TWO = TVec(Val(2))
+@inline function smoothstep(t::T) where {T}
+    t = clamp(t, zero(T), one(T))
+    THREE = (T <: Vec) ? T(i->3) : convert(T, 3)
+    TWO = (T <: Vec) ? T(i->2) : convert(T, 2)
     return t * t * (THREE - (TWO * t))
 end
-@inline smoothstep(t::Number) = smoothstep(Vec(t)).x
 @inline smoothstep(a, b, t) = lerp(a, b, smoothstep(t))
 
 """
@@ -27,14 +26,13 @@ An even smoother version of `smoothstep()`, at the cost of a little performance.
 Again, unlike lerp(), this function clamps t to the range (0, 1),
     as its behavior outside this range is not intuitive.
 """
-@inline function smootherstep(t::TVec) where {TVec<:Vec}
-    t = clamp(t, zero(TVec), one(TVec))
-    SIX = TVec(Val(6))
-    TEN = TVec(Val(10))
-    nFIFTEEN = TVec(Val(-15))
+@inline function smootherstep(t::T) where {T}
+    t = clamp(t, zero(T), one(T))
+    SIX = (T <: Vec) ? T(i->6) : convert(T, 6)
+    TEN = (T <: Vec) ? T(i->10) : convert(T, 10)
+    nFIFTEEN = (T <: Vec) ? T(i->-15) : convert(T, -15)
     return t * t * t * (TEN + (t * (nFIFTEEN + (t * SIX))))
 end
-@inline smootherstep(t::Number) = smootherstep(Vec(t)).x
 @inline smootherstep(a, b, t) = lerp(a, b, smootherstep(t))
 
 export lerp, smoothstep, smootherstep
@@ -72,9 +70,9 @@ export typemax_finite
 
 "Solves the quadratic equation given a, b, and c."
 function solve_quadratic( a::F, b::F, c::F
-                        )::Option{Tuple{F, F}} where {F<:Real}
+                        )::Optional{Tuple{F, F}} where {F<:Real}
     discriminant::F = (b * b) - (convert(F, 4) * a * c)
-    if discriminant == 0
+    if discriminant < 0
         return nothing
     end
 

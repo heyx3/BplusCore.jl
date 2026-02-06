@@ -37,7 +37,7 @@ struct Quaternion{F}
     The vectors should be normalized.
     """
     @inline Quaternion(from::Vec3{F}, to::Vec3{F}) where {F} = Quaternion{F}(from, to)
-    @inline Quaternion(from::Vec3{F1}, to::Vec3{F2}) where {F1, F2} = Quaternion{promote_type(F, F2)}(from, to)
+    @inline Quaternion(from::Vec3{F1}, to::Vec3{F2}) where {F1, F2} = Quaternion{promote_type(F1, F2)}(from, to)
     function Quaternion{F}(from::Vec3{F2}, to::Vec3{F3}) where {F, F2, F3}
         if !(F2<:Integer)
             @bp_math_assert(v_is_normalized(from, convert(F2, 0.001)), "'from' vector isn't normalized")
@@ -296,16 +296,27 @@ The interpolation is nonlinear, following the surface of the unit sphere
    but is a bit expensive to compute.
 The quaternions' 4 components must be normalized.
 """
-@inline function q_slerp(a::Quaternion{F}, b::Quaternion{F}, t::F) where {F}
+@inline function q_slerp(a::Quaternion{F}, b::Quaternion{F}, t::F)::Quaternion{F} where {F}
     @bp_math_assert(q_is_normalized(a, convert(F, 0.001)))
     @bp_math_assert(q_is_normalized(b, convert(F, 0.001)))
 
-    cos_angle::F = vdot(a.data, b.data)
-    angle::F = acos(cos_angle) * t
+    a_vec = getfield(a, :data)
+    b_vec = getfield(b, :data)
 
-    output::Quaternion{F} = Quaternion(vnorm(b.data - (one.data * cos_angle)))
-    (sin_angle::F, cos_angle) = sincos(angle)
-    return Quaternion((a.data * cos_angle) + (output.data * sin_angle))
+    # Source: https://splines.readthedocs.io/en/latest/rotation/slerp.html
+    cos_angle::F = vdot(a_vec, b_vec)
+    if cos_angle < zero(F)
+        b_vec = -b_vec
+        cos_angle = -cos_angle
+        b = Quaternion{F}(b_vec)
+    end
+    angle::F = acos(cos_angle)
+    inv_t::F = one(F) - t
+    weighting::F = one(F) / sin(angle)
+    return Quaternion{F}(
+        (a_vec * sin(inv_t * angle) * weighting) +
+        (b_vec * sin(t * angle) * weighting)
+    )
 end
 export q_slerp
 
@@ -319,16 +330,16 @@ It's simple (and fast) linear interpolation,
   which can lead to strange animations when tweening.
 Use q_slerp() instead for smoother rotations.
 """
-@inline lerp(a::Quaternion, b::Quaternion, t) = vnorm(Quaternion(lerp(a.data, b.data, t)))
+@inline lerp(a::Quaternion, b::Quaternion, t) = Quaternion(vnorm(lerp(a.xyzw, b.xyzw, t)))
 # No export needed for lerp(), because it's an overload of an existing function.
 
 "
-Chain Quaternion rotations in the order signified by the arrow.
+Chain Quaternion rotations in chronological order signified by the arrow.
 E.x. `a << b` means \"Rotate by `b`, then rotate by `a`\".
 "
 @inline Base.:(<<)(lhs::Quaternion, rhs::Quaternion) = Quaternion(rhs, lhs)
 "
-Chain Quaternion rotations in the order signified by the arrow.
+Chain Quaternion rotations in chronological order signified by the arrow.
 E.x. `a >> b` means \"Rotate by `a`, then rotate by `b`\".
 "
 @inline Base.:(>>)(lhs::Quaternion, rhs::Quaternion) = Quaternion(lhs, rhs)
@@ -372,7 +383,7 @@ end
 export q_axisangle
 
 "Converts a quaternion to a 3x3 transformation matrix"
-function q_mat3x3(q::Quaternion{F})::Mat(3, 3, F) where {F}
+function q_mat3x3(q::Quaternion{F})::@Mat(3, 3, F) where {F}
     # Source: https://www.euclideanspace.com/maths/geometry/rotations/conversions/quaternionToMatrix/index.htm
 
     v::Vec3{F} = q.xyz
@@ -384,7 +395,7 @@ function q_mat3x3(q::Quaternion{F})::Mat(3, 3, F) where {F}
     xy2::F = v.x * v.y * TWO
     xz2::F = v.x * v.z * TWO
     yz2::F = v.y * v.z * TWO
-    vw2::Vec3{F} = v * (w * TWO)
+    vw2::Vec3{F} = v * (q.w * TWO)
 
     return @SMatrix [ (ONE - (TWO * (v_sqr.y + v_sqr.z)))               (xy2 - vw2.z)                       (xz2 + vw2.y)
                                 (xy2 + vw2.z)               (ONE - (TWO * (v_sqr.x + v_sqr.z)))             (yz2 - vw2.x)

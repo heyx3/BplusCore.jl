@@ -694,12 +694,18 @@ end
 #@bp_test_no_allocations(f(), sum(1:30))
 @bp_check(f() == sum(1:30))
 
-# Test backwards iterations.
+# Test backwards ranges.
 @bp_test_no_allocations(size(v3i(2, 3, 4):v3i(-1, 1, -1):v3i(1, 5, 1)),
                           (2, 3, 4))
 @bp_test_no_allocations(length(v3i(2, 3, 4):v3i(-1, 1, -1):v3i(1, 5, 1)),
                           2*3*4)
 @bp_test_no_allocations(isempty(v3i(2, 3, 4):v3i(-1, 1, -1):v3i(1, 5, 1)), false)
+
+# Test indexing into ranges.
+@bp_test_no_allocations((v3i(2, 3, 4):v3i(1, 2, 3):v3i(10, 20, 30))[5],
+                          v3i(6, 3, 4))
+@bp_test_no_allocations((v3i(2, 3, 4):v3i(1, 2, 3):v3i(10, 20, 30))[10],
+                          v3i(2, 5, 4))
 
 # Test map!() on a range of coordinates, which invokes several helper functions that I had to overload.
 const MAP_RANGE = 1:v2i(2, 3)
@@ -711,7 +717,7 @@ map!(v -> v*10, map_data, collect(1:v2i(2, 3)))
           "Actual: ", map_data)
 
 # Test random values inside vector ranges.
-@bp_test_no_allocations(typeof(rand(1:v3i(4, 5, 6))), v3i)
+@bp_test_no_allocations(typeof(rand(Int32(1):v3i(4, 5, 6))), v3i)
 for _ in 1:100
     range = v3i(1, 5, 9):v3i(3, 2, 1):v3i(100, 2000, 400)
     val = rand(range)
@@ -720,7 +726,7 @@ for _ in 1:100
 end
 
 # Test the multidimensional nature of vec ranges.
-const MULTI_RANGE = 4:v2u(2, 3):10
+const MULTI_RANGE = UInt32(4):v2u(2, 3):UInt32(10)
 @bp_test_no_allocations(size(MULTI_RANGE), (4, 3))
 @bp_test_no_allocations(length(MULTI_RANGE), 4*3)
 @bp_check(collect(MULTI_RANGE) == [

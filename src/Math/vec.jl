@@ -2,8 +2,19 @@ using TupleTools, Setfield
 
 """
 A vector math struct.
-You can get its data from:
-* The field "data", e.x. `v.data::NTuple`
+
+It can be constructed with no type parameters, both type parameters,
+  or just the component type, but not just the dimensionality!
+The following constructors are offered:
+* Provide individual components (zero components creates a 0-vector, to aid recursive functions, but type params are needed)
+* Provide a tuple of components (zero-tuple creates a 0-vector, but type params are needed)
+* Provide all type parameters and a lambda to generate each component from its index
+* Provide all type parameters and no arguments, to construct a zero-vector
+* Call `zero(Vec{N, T})` or `one(Vec{N, T})`
+* Call `vappend(...)` to append vectors and scalars together
+
+You can get its components with:
+* The field "data", providing a tuple of the components
 * Individual XYZW or RGBA components, e.x. `v1.x == v1.r`
 * Swizzling, e.x. `v.yyyz == Vec(v.y, v.y, v.y, v.z)`.
 
@@ -42,6 +53,7 @@ struct Vec{N, T} <: AbstractVector{T}
     Vec{0, T}(t::Tuple{}) where {T} = new{0, T}(t)
 
     # Construct a constant vector with all components set to one value.
+    #TODO: Remove this, it's silly
     @inline Vec(n::Int, ::Val{X}) where {X} = new{n, typeof(X)}(tuple(Iterators.repeated(X, n)...))
     @inline Vec{N}(::Val{X}) where {N, X} = new{N, typeof(X)}(tuple(Iterators.repeated(X, N)...))
     @inline Vec{N, T}(::Val{X}) where {N, T, X} = new{N, T}(tuple(Iterators.repeated(X, N)...))
@@ -70,7 +82,7 @@ struct Vec{N, T} <: AbstractVector{T}
     @inline Vec{N, T}(data::T...) where {N, T} = new{N, T}(data)
 
     # "Empty" constructor makes a value with all 0's.
-    Vec{N, T}() where {N, T} = new{N, T}(tuple(Iterators.repeated(zero(T), N)...))
+    Vec{N, T}() where {N, T} = new{N, T}(Tuple(Iterators.repeated(zero(T), N)))
 
     # Construct with a lambda, like ntuple().
     Vec(make_component::TCallable, n::Int) where {TCallable<:Base.Callable} = Vec(ntuple(make_component, n)...)
@@ -87,7 +99,7 @@ export Vec
 @inline vappend(first, rest...) = Vec(vappend(first)..., vappend(rest...)...)
 # NOTE: This was originally implemented as a Vec constructor,
 #    but that caused havoc on type-inference.
-# I don't recomment trying that again.
+# I don't recommend trying that again.
 export vappend
 
 StructTypes.construct(T::Type{<:Vec}, components::Vector) = T(components...)
@@ -252,10 +264,18 @@ Base.max(p1::Vec{N, T1}, p2::T2) where {N, T1, T2} = Vec((max(p1[i], p2) for i i
 
 @inline function Base.minmax(p1::Vec{N, T1}, p2::Vec{N, T2}) where {N, T1, T2}
     T3 = promote_type(T1, T2)
-    minmax_tuple = map(minmax, p1, p2)
+
+    # Special case that messes with type inference:
+    #   N == 1, so 'result' would become a Vec2 instead of a Vec1{NTuple{2}}.
+    if N == 1
+        mm = minmax(p1.x, p2.x)
+        return (Vec(mm[1]), Vec(mm[2]))
+    end
+
+    result::Vec{N, NTuple{2, T3}} = map(minmax, p1, p2)
     return (
-        Vec{N, T3}(i -> minmax_tuple[i][1]),
-        Vec{N, T3}(i -> minmax_tuple[i][2])
+        Vec{N, T3}(i -> result[i][1]),
+        Vec{N, T3}(i -> result[i][2])
     )
 end
 Base.minmax(p1::Vec{N, T1}, p2::T2) where {N, T1, T2} = minmax(p1, Vec{N, T2}(i->p2))
@@ -263,10 +283,18 @@ Base.minmax(p1::Number, p2::Vec) = minmax(p2, p1)
 
 @inline function Base.divrem(x::Vec{N, T1}, y::Vec{N, T2}) where {N, T1, T2}
     T3 = promote_type(T1, T2)
-    divrem_tuple = map(divrem, x, y)
+
+    # Special case that messes with type inference:
+    #   N == 1, so 'result' would become a Vec2 instead of a Vec1{NTuple{2}}.
+    if N == 1
+        dr = divrem(x.x, y.x)
+        return (Vec(dr[1]), Vec(dr[2]))
+    end
+
+    result::Vec{N, NTuple{2, T3}} = map(divrem, x, y)
     return (
-        Vec{N, T3}(i->divrem_tuple[i][1]),
-        Vec{N, T3}(i->divrem_tuple[i][2])
+        Vec{N, T3}(i->result[i][1]),
+        Vec{N, T3}(i->result[i][2])
     )
 end
 Base.divrem(x::Vec{N, T1}, y::T2) where {N, T1, T2} = divrem(x, Vec{N, T2}(i->y))
@@ -303,6 +331,8 @@ Base.clamp(v::Vec{N, T}, a::Vec{N, T2}, b::Vec{N, T3}) where {N, T, T2, T3} = Ve
 
 Base.floor(v::Vec) = map(floor, v)
 Base.ceil(v::Vec) = map(ceil, v)
+Base.floor(T::Type{<:Vec}, v::Vec) = convert(T, floor(v))
+Base.ceil(T::Type{<:Vec}, v::Vec) = convert(T, ceil(v))
 
 function Base.isapprox( a::Vec{N}, b::Vec{N};
                         atol::Real=0,
@@ -520,6 +550,7 @@ Base.mod(a::Vec{N, T}, b::T2) where {N, T, T2<:Number} = map(f -> mod(f, b), a)
 @inline Base.:(-)(a::Number, b::Vec) = (-b)+a
 @inline Base.:(*)(a::Number, b::Vec) = b*a
 @inline Base.:(/)(a::Number, b::Vec) = map(f->(a/f), b)
+@inline Base.:(^)(a::Number, b::Vec) = map(f->(a^f), b)
 @inline Base.:(÷)(a::Number, b::Vec) = map(f->(a÷f), b)
 @inline Base.:(%)(a::Number, b::Vec) = map(f->(a%f), b)
 
@@ -570,6 +601,9 @@ Base.Ref(v::Vec, i::Integer) = Ref(v[i:end])
 #    Colon Operator   #
 #######################
 
+Base.oneunit(v::Vec) = one(typeof(v))
+Base.oneunit(T::Type{<:Vec}) = one(T)
+
 "Implements iteration over a range of coordinates (you can also use the `:` operator)"
 struct VecRange{N, T} <: AbstractRange{Vec{N, T}}
     a::Vec{N, T}
@@ -589,14 +623,37 @@ end
     VecRange(convert(V, a), convert(V, b), convert(V, step))
 end
 
-# Support mixing single values with vectors.
-Base.:(:)(a::Vec, b::Number) = a : typeof(a)(i->b)
-Base.:(:)(a::Number, b::Vec) = typeof(b)(i->a) : b
-Base.:(:)(a::Vec, step::Number, b::Vec) = a : typeof(a)(i->step) : b
-Base.:(:)(a::Number, step::Vec, b::Vec) = typeof(b)(i->a) : step : b
-Base.:(:)(a::Number, step::Number, b::Vec) = typeof(b)(i->a) : typeof(b)(i->step) : b
-Base.:(:)(a::Number, step::Vec, b::Number) = typeof(step)(i->a) : step : typeof(step)(i->b)
-Base.:(:)(a::T, step::Vec, b::T) where {T<:Real} = typeof(step)(i->a) : step : typeof(step)(i->b)
+# Support mixing scalars with vectors.
+@inline function vec_colon(a, step, b)::VecRange
+    if a isa Number
+        return vec_colon(Vec(a), step, b)
+    elseif step isa Number
+        return vec_colon(a, Vec(step), b)
+    elseif b isa Number
+        return vec_colon(a, step, Vec(b))
+    end
+
+    N = max(length(a), length(step), length(b))
+    if N > 1
+        if length(a) == 1
+            return vec_colon(Vec(ntuple(i->a[1], Val(N))), step, b)
+        elseif length(step) == 1
+            return vec_colon(a, Vec(ntuple(i->step[1], Val(N))), b)
+        elseif length(b) == 1
+            return vec_colon(a, step, Vec(ntuple(i->b[1], Val(N))))
+        end
+    end
+
+    return a:step:b
+end
+Base.:(:)(a::Vec, b::Real) = vec_colon(a, one(typeof(b)), b)
+Base.:(:)(a::Real, b::Vec) = vec_colon(a, one(typeof(a)), b)
+Base.:(:)(a::Vec, step::Real, b::Real) = vec_colon(a, step, b)
+Base.:(:)(a::Real, step::Vec, b::Real) = vec_colon(a, step, b)
+Base.:(:)(a::Real, step::Real, b::Vec) = vec_colon(a, step, b)
+Base.:(:)(a::Vec, step::Vec, b::Real) = vec_colon(a, step, b)
+Base.:(:)(a::Vec, step::Real, b::Vec) = vec_colon(a, step, b)
+Base.:(:)(a::Real, step::Vec, b::Vec) = vec_colon(a, step, b)
 
 Base.IteratorSize(::Type{<:VecRange{N}}) where {N} = Base.HasShape{N}()
 Base.size(r::VecRange) = tuple(
@@ -612,13 +669,14 @@ Base.length(r::VecRange) = prod(size(r))
 Base.collect(r::VecRange) = map(identity, r)
 
 function Base.getindex(v::VecRange{N, T}, i::Integer) where {N, T}
-    # Copied and modified from the implementation for `AbstractRange`.
+    # Based loosely on the default implementation for `AbstractRange` as of an earlier Julia version.
     @inline
-    i isa Bool && throw(ArgumentError("invalid index: $i of type Bool"))
-    # Here's the modified part:
-    axis_count = (last(v) - first(v) + 1) ÷ step(v)
-    i_per_axis = Vec(Base._ind2sub(axis_count.data, i)...)
-    @boundscheck (all(i_per_axis > 0) & (i_per_axis <= axis_count)) || Base.throw_boundserror(v, i)
+    (i isa Bool) && throw(ArgumentError("invalid index: $i of type Bool"))
+
+    axis_count::Vec = Vec(size(v)...)
+    i_per_axis = vindex(i, axis_count)
+
+    @boundscheck all((i_per_axis > 0) & (i_per_axis <= axis_count)) || Base.throw_boundserror(v, i)
     return first(v) + ((i_per_axis - 1) * step(v))
 end
 @inline Base.in(v::Vec{N, T2}, r::VecRange{N, T}) where {N, T, T2} = all(tuple(
@@ -720,9 +778,6 @@ Setfield.set(v::Vec, ::Val{:data}, val) = return typeof(v)(val...)
 #   Other functions   #
 #######################
 
-@inline swizzle(v::Vec, components::Symbol) = swizzle(v, Val(components))
-@inline @generated swizzle(v::Vec{N, T}, components::Val{S}) where {N, T, S} = swizzle_ast(N, T, S, :v)
-
 function swizzle_ast(N::Int, T::Type, S::Symbol, var_name::Symbol)
     chars = string(S)
 
@@ -754,6 +809,9 @@ function swizzle_ast(N::Int, T::Type, S::Symbol, var_name::Symbol)
     N2 = length(outputs)
     return :( Vec{$N2, T}($(outputs...)) )
 end
+@inline swizzle(v::Vec, components::Symbol) = swizzle(v, Val(components))
+@inline @generated swizzle(v::Vec{N, T}, components::Val{S}) where {N, T, S} = swizzle_ast(N, T, S, :v)
+
 
 "Computes the dot product of two vectors"
 @inline vdot(v1::Vec, v2::Vec) = +(((t[1] * t[2]) for t in zip(v1, v2))...)
@@ -934,7 +992,8 @@ Also defined for scalars so that you can fully replace ternary operations with t
 end
 
 "Component-wise equality test, also defined for scalars for convenience"
-@inline vequal(a::Union{Vec, Real}, b::Union{Vec, Real})::Union{Vec, Real} = if a isa Real
+@inline vequal(a::Union{Vec, Real}, b::Union{Vec, Real})::Union{Vec, Real} =
+    if a isa Real
         if b isa Real
             a==b
         else
@@ -951,26 +1010,12 @@ end
     else
         map(==, a, b)
     end
+#
 
 "Converts a multidimensional array index to a flat one, assuming X is the innermost component"
-function vindex(p::Vec{N, <:Integer}, size::Vec{N, <:Integer}) where {N}
-    if N == 0 # Degenerative case, but technically possible
-        return 1
-    elseif N == 1
-        return p[1]
-    else
-        sub_range = Val(2:N)
-        return p[1] + (size[1] * (vindex(p[sub_range], size[sub_range]) - 1))
-    end
-end
+vindex(p::Vec{N, <:Integer}, size::Vec{N, <:Integer}) where {N} = Base._sub2ind(size.data, p...)
 "Converts a flat array index to a multidimensional one, assuming X is the innermost component"
-function vindex(i::Integer, size::Vec{N, <:Integer}) where {N}
-    I = promote_type(typeof(i), eltype(size))
-    i1 = i - 1 # Zero-based math is easier here.
-    return 1 + Vec{N, I}(
-        d -> (i1 ÷ prod(size[1:(d-1)])) % size[d]
-    )
-end
+vindex(i::Integer, size::Vec{N, <:Integer}) where {N} = Vec(Base._ind2sub(size.data, i)...)
 
 "
 Gets the size of an array as a `Vec`, rather than an `NTuple`.

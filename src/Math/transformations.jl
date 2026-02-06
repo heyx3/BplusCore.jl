@@ -80,7 +80,7 @@ function m3_rotate(q::Quaternion{F}) where {F}
     xy2::F = v.x * v.y * TWO
     xz2::F = v.x * v.z * TWO
     yz2::F = v.y * v.z * TWO
-    vw2::Vec3{F} = v * (w * TWO) 
+    vw2::Vec3{F} = v * (q.w * TWO) 
 
     return @SMatrix [
         (ONE - (TWO * (v_sqr.y + v_sqr.z)))               (xy2 - vw2.z)                       (xz2 + vw2.y)

@@ -86,61 +86,65 @@ export Mat, @Mat, MatT, MatF, MatD, Mat2, Mat3, Mat4,
 #      You can achieve it manually pretty easily anyway.
 @inline Base.:*(v::Vec, m::Mat) = error("B+ uses pre-multiplication. Instead of doing v*m, do m'*v.")
 
-"Applies a transform matrix to the given coordinate."
-function m_apply_point(m::Mat{4, 4, F1}, v::Vec{3, F2})::Vec{3} where {F1, F2}
-    v4::Vec{4, F2} = vappend(v, one(F2))
-    u4::Vec{4, promote_type(F1, F2)} = m * v4
-    return u4.xyz / u4.w
-end
-function m_apply_point(m::Mat{3, 3, F1}, v::Vec{2, F2})::Vec{2} where {F1, F2}
-    v3::Vec{3, F2} = vappend(v, one(F2))
-    u3::Vec{3, promote_type(F1, F2)} = m * v3
-    return u3.xy / u3.z
-end
-m_apply_point(m::Mat{N, N}, v::Vec{N}) where {N} = m * v
 "
-Applies a transform matrix to the given coordinate, assuming the homogeneous component stays at 1.0
-    and does not need to be processed.
-This is generally true for world and view matrices, but not projection matrices.
+Applies a transform matrix to the given coordinate,
+ optionally with an extra homogenous component to the matrix.
 "
-function m_apply_point_affine(m::Mat{3, 3, F1}, v::Vec{2, F2}) where {F1, F2}
-    return (m * vappend(v, one(F2))).xy
+function m_apply_point(m::Mat{N, N}, v::Vec{N})::Vec{N} where {N}
+    return m * v
 end
-function m_apply_point_affine(m::Mat{4, 4, F1}, v::Vec{3, F2}) where {F1, F2}
-    return (m * vappend(v, one(F2))).xyz
+function m_apply_point(m::Mat{N, N, F1}, v::Vec{M, F2})::Vec{M} where {N, M, F1, F2}
+    @bp_check(N == M+1,
+              "Transform with ", N, "x", N, " matrix requires ",
+              N-1, "D or ", N, "D vector but received ", M, "D")
+
+    vv::Vec{N, F2} = vappend(v, one(F2))
+    u::Vec{N, promote_type(F1, F2)} = m * vv
+    return u[1:M] / u[N]
 end
-"Applies a transform matrix to the given vector (i.e. ignoring translation)."
-function m_apply_vector(m::Mat{4, 4, F1}, v::Vec{3, F2}) where {F1, F2}
-    v4::Vec{4, F2} = vappend(v, zero(F2))
-    u4::Vec{4, promote_type(F1, F2)} = m * v4
-    return iszero(u4.w) ? u4.xyz : (u4.xyz / u4.w)
-end
-function m_apply_vector(m::Mat{3, 3, F1}, v::Vec{2, F2}) where {F1, F2}
-    v3::Vec{3, F2} = vappend(v, zero(F2))
-    u3::Vec{3, promote_type(F1, F2)} = m * v3
-    return iszero(u3.z) ? u3.xy : (u3.xy / u3.z)
-end
-m_apply_vector(m::Mat{N, N}, v::Vec{N}) where {N} = m * v
+
 "
-Applies a transform matrix to the given vector (i.e. ignoring translation),
+Applies a transform matrix to the given coordinate,
     assuming the homogeneous component stays at 1.0 and does not need to be processed.
 This is generally true for world and view matrices, but not projection matrices.
 "
-function m_apply_vector_affine(m::Mat{3, 3, F1}, v::Vec{2, F2}) where {F1, F2}
-    # No translation *and* no skew means we can just drop the last row and column.
-    # Unfortunately, slicing a static array does not yield another static array.
-    m2 = @Mat(2, 2, F1)(m[1], m[2],
-                        m[4], m[5])
-    return m2 * v
+function m_apply_point_affine(m::Mat{N, N, F1}, v::Vec{M, F2})::Vec{M} where {N, M, F1, F2}
+    @bp_check(N == M+1,
+              "Affine transform with ", N, "x", N, " matrix requires ",
+              N-1, "D vector but received ", M, "D")
+    return (m * vappend(v, one(F2)))[1:M]
 end
-function m_apply_vector_affine(m::Mat{4, 4, F1}, v::Vec{3, F2}) where {F1, F2}
-    # No translation *and* no skew means we can just drop the last row and column.
-    # Unfortunately, slicing a static array does not yield another static array.
-    m3 = @Mat(3, 3, F1)(m[1], m[2], m[3],
-                        m[5], m[6], m[7],
-                        m[9], m[10], m[11])
-    return m3 * v
+
+"
+Applies a transform matrix to the given vector (i.e. ignoring translation),
+  optionally with an extra homogenous component to the matrix.
+"
+function m_apply_vector(m::Mat{N, N}, v::Vec{N})::Vec{N} where {N}
+    return m * v
 end
+function m_apply_vector(m::Mat{N, N, F1}, v::Vec{M, F2})::Vec{M} where {N, M, F1, F2}
+    @bp_check(N == M+1,
+              "Transform with ", N, "x", N, " matrix requires ",
+              N-1, "D or ", N, "D vector but received ", M, "D")
+
+    vv::Vec{N, F2} = vappend(v, zero(F2))
+    u::Vec{N, promote_type(F1, F2)} = m * vv
+    return iszero(u[N]) ? u[1:M] : (u[1:M] / u[N])
+end
+
+"
+Applies a transform matrix to the given vector (i.e. ignoring translation),
+    assuming the homogeneous component stays at 0.0 and does not need to be processed.
+This is generally true for world and view matrices, but not projection matrices.
+"
+function m_apply_vector_affine(m::Mat{N, N, F1}, v::Vec{M, F2})::Vec{M} where {N, M, F1, F2}
+    @bp_check(N == M+1,
+              "Affine transform with ", N, "x", N, " matrix requires ",
+              N-1, "D vector but received ", M, "D")
+    # No translation *and* no skew means we can just drop the last row and column.
+    return @Mat(M, M, F1)(@view(m[1:M, 1:M])) * v
+end
+
 export m_apply_point, m_apply_vector,
        m_apply_point_affine, m_apply_vector_affine
 
@@ -158,11 +162,11 @@ const m_transpose = StaticArrays.transpose
 export m_transpose
 
 "Creates an identity matrix"
-m_identity(n_cols::Int, n_rows::Int, F::Type{<:AbstractFloat}) = one(Mat{n_cols, n_rows, F, n_cols*n_rows})
+@inline m_identity(n_cols::Int, n_rows::Int, F::Type{<:AbstractFloat}) = one(Mat{n_cols, n_rows, F, n_cols*n_rows})
 "Creates an identity matrix with Float32 components"
-m_identityf(n_cols::Int, n_rows::Int) = m_identity(n_cols, n_rows, Float32)
+@inline m_identityf(n_cols::Int, n_rows::Int) = m_identity(n_cols, n_rows, Float32)
 "Creates an identity matrix with Float64 components"
-m_identityd(n_cols::Int, n_rows::Int) = m_identity(n_cols, n_rows, Float64)
+@inline m_identityd(n_cols::Int, n_rows::Int) = m_identity(n_cols, n_rows, Float64)
 export m_identity, m_identityf, m_identityd
 
 "Embeds a 3x3 matrix into a 4x4 matrix, using 0 for the new components except for 1 at {4, 4}"
