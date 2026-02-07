@@ -4,6 +4,7 @@
 * Add `wraparound()` for advanced modulo
 * Add `vequal()` for component-wise vector equality
 * Add `get_something()` to help working with `Optional` values
+* Add precompilation statements, especially around Math, and fix countless syntax bugs that were uncovered
 
 # v0.3.1
 
