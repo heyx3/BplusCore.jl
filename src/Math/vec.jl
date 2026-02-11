@@ -668,16 +668,16 @@ Base.length(r::VecRange) = prod(size(r))
 # collect() for ranges is forced to 1D; we need to override that.
 Base.collect(r::VecRange) = map(identity, r)
 
-function Base.getindex(v::VecRange{N, T}, i::Integer) where {N, T}
+function Base.getindex(v::VecRange{N, I}, i::Integer)::Vec{N, I} where {N, I}
     # Based loosely on the default implementation for `AbstractRange` as of an earlier Julia version.
     @inline
     (i isa Bool) && throw(ArgumentError("invalid index: $i of type Bool"))
 
-    axis_count::Vec = Vec(size(v)...)
-    i_per_axis = vindex(i, axis_count)
+    axis_count = Vec{N, I}(size(v)...)
+    i_per_axis::Vec{N, I} = vindex(i, axis_count)
 
-    @boundscheck all((i_per_axis > 0) & (i_per_axis <= axis_count)) || Base.throw_boundserror(v, i)
-    return first(v) + ((i_per_axis - 1) * step(v))
+    @boundscheck all((i_per_axis > zero(I)) & (i_per_axis <= axis_count)) || Base.throw_boundserror(v, i)
+    return first(v) + ((i_per_axis - one(I)) * step(v))
 end
 @inline Base.in(v::Vec{N, T2}, r::VecRange{N, T}) where {N, T, T2} = all(tuple(
     (v[i] in r.a[i]:r.step[i]:r.b[i]) for i in 1:N
@@ -1015,7 +1015,7 @@ end
 "Converts a multidimensional array index to a flat one, assuming X is the innermost component"
 vindex(p::Vec{N, <:Integer}, size::Vec{N, <:Integer}) where {N} = Base._sub2ind(size.data, p...)
 "Converts a flat array index to a multidimensional one, assuming X is the innermost component"
-vindex(i::Integer, size::Vec{N, <:Integer}) where {N} = Vec(Base._ind2sub(size.data, i)...)
+vindex(i::Integer, size::Vec{N, <:Integer}) where {N} = Vec{N, typeof(i)}(Base._ind2sub(size.data, i)...)
 
 "
 Gets the size of an array as a `Vec`, rather than an `NTuple`.
