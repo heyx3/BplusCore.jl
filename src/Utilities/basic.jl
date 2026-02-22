@@ -253,7 +253,7 @@ enumerate_as_pair(it) = EnumeratedPairing(it)
 export enumerate_as_pair
 
 "Inserts a delimiter between each element of an iteration"
-iter_join(iterable, delimiter) = drop_last(Iterators.flatten(zip(iterable, Iterators.repeated(delimiter))))
+iter_join(iterable, delimiter) = isempty(iterable) ? () : drop_last(Iterators.flatten(zip(iterable, Iterators.repeated(delimiter))))
 export iter_join
 
 "A variant of 'reduce()' which skips elements that fail a certain predicate"

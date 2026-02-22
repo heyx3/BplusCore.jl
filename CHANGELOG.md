@@ -1,3 +1,7 @@
+# v0.3.3
+
+* Fix bug with `iter_join` on empty iterators
+
 # v.0.3.2
 
 * Add `Curve{T}`, for animation curves

@@ -65,6 +65,7 @@ catch e; end
 @bp_check(collect(iter_join(1:5, ',')) ==
             [ 1, ',', 2, ',', 3, ',', 4, ',', 5],
           collect(iter_join(1:5, ',')))
+@bp_check(collect(iter_join(1:-1, ',')) == [ ])
 
 # Test @unionspec
 @bp_check(@unionspec(Vector{_}, Int, Float64) ==
