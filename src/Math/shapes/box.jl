@@ -177,11 +177,15 @@ end
 @inline Box(data::Union{NamedTuple{(:min, :size)}, NamedTuple{(:size, :min)}}) =
     Box(data.min, data.size)
 "Creates a box given a min and *inclusive* max"
-@inline Box(data::Union{NamedTuple{(:min, :max)}, NamedTuple{(:max, :min)}}) =
-    Box(data.min, box_typenext(data.max) - data.min)
+@inline Box(data::Union{NamedTuple{(:min, :max)}, NamedTuple{(:max, :min)}}) = begin
+    (p_min, p_max) = promote(data.min, data.max)
+    Box(p_min, box_typenext(p_max) - p_min)
+end
 "Creates a box given a size and *inclusive* max"
-@inline Box(data::Union{NamedTuple{(:max, :size)}, NamedTuple{(:size, :max)}}) =
-    Box(box_typenext(data.max) - data.size, data.size)
+@inline Box(data::Union{NamedTuple{(:max, :size)}, NamedTuple{(:size, :max)}}) = begin
+    (p_max, p_size) = promote(data.max, data.size)
+    Box(box_typenext(p_max) - p_size, p_size)
+end
 "
 Creates a box given a center and size (and a choice between integer and float division).
 If using integer division and an even size, the center value is put on the max half of the range.
@@ -194,9 +198,9 @@ If using integer division and an even size, the center value is put on the max h
     )
 
     half_size = if division_mode == @ano_value(Int)
-        data.size ÷ convert(component_type, 2)
+        convert(typeof(data.size), data.size ÷ convert(component_type, 2))
     elseif division_mode == @ano_value(Float)
-        data.size / convert(component_type, 2)
+        convert(typeof(data.size), data.size / convert(component_type, 2))
     else
         error("Unhandled division mode: ", val_type(division_mode))
     end
@@ -205,7 +209,7 @@ If using integer division and an even size, the center value is put on the max h
 end
 @inline function Box(data::Union{NamedTuple{(:center, :size)}, NamedTuple{(:size, :center)}})
     T = (data.center isa Vec) ? eltype(data.center) : typeof(data.center)
-    division_mode = if T isa Integer
+    division_mode = if T <: Integer
         @ano_value(Int)
     else
         @ano_value(Float)

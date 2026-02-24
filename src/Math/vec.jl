@@ -604,7 +604,11 @@ Base.Ref(v::Vec, i::Integer) = Ref(v[i:end])
 Base.oneunit(v::Vec) = one(typeof(v))
 Base.oneunit(T::Type{<:Vec}) = one(T)
 
-"Implements iteration over a range of coordinates (you can also use the `:` operator)"
+"
+Implements iteration over a range of coordinates (you can also use the `:` operator).
+
+The iterator state for this struct is `Vec{N, T}`, representing the next pixel in the iteration.
+"
 struct VecRange{N, T} <: AbstractRange{Vec{N, T}}
     a::Vec{N, T}
     b::Vec{N, T}

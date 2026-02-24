@@ -1,6 +1,7 @@
 # v0.3.3
 
 * Fix bug with `iter_join` on empty iterators
+* Fix some small type-deduction issues with `Vec`, `VecRange`, and `Box`
 
 # v.0.3.2
 
