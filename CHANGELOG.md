@@ -3,7 +3,7 @@
 * Fix bug with `iter_join` on empty iterators
 * Fix some small type-deduction issues with `Vec`, `VecRange`, and `Box`
 
-# v.0.3.2
+# v0.3.2
 
 * Add `Curve{T}`, for animation curves
 * Add `wraparound()` for advanced modulo

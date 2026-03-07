@@ -304,7 +304,8 @@ Base.divrem(x::T1, y::Vec{N, T2}) where {N, T1, T2} = divrem(Vec{N, T1}(i->x), y
 
 @inline Base.round(v::Vec{N, T}, a...; kw...) where {N, T} = map(f -> round(f, a...; kw...), v)
 #NOTE: Overload resolution problems prevent the below signature from taking component type rather than vec type.
-@inline Base.round(::Type{Vec{N, T2}}, v::Vec{N, T}, a...; kw...) where {N, T, T2} = map(f -> round(T2, f, a...; kw...), v)
+@inline Base.round(::Type{Vec{N, T2}}, v::Vec{N, T}, r::Base.RoundingMode{TMode}; kw...) where {N, T, T2, TMode} = map(f -> round(T2, f, r; kw...), v)
+@inline Base.round(::Type{Vec{N, T2}}, v::Vec{N, T}                             ; kw...) where {N, T, T2       } = map(f -> round(T2, f,  ; kw...), v)
 
 "Finds the minimum component which passes a given predicate"
 function Base.findmin(pred::F, v::Vec{N, T})::Optional{T} where {F, N, T}
