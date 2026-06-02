@@ -66,6 +66,11 @@ catch e; end
             [ 1, ',', 2, ',', 3, ',', 4, ',', 5],
           collect(iter_join(1:5, ',')))
 @bp_check(collect(iter_join(1:-1, ',')) == [ ])
+# Test iter_join_flatten()
+let actual = collect(iter_join_flatten([ "hi", [ 3, 2, 1 ] ], ", "))
+    @bp_check(actual == [ 'h', 'i', ", ", 3, 2, 1 ],
+              "Got ", actual)
+end
 
 # Test @unionspec
 @bp_check(@unionspec(Vector{_}, Int, Float64) ==

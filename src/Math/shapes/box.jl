@@ -1,13 +1,176 @@
 "
+Given two box params as a named-tuple, and optionally some forced output types,
+  converts/promotes the parameter types to N-dimensional vectors.
+
+Returns `(N, F, promoted_args)`
+"
+function fix_box_params(args::NT, TypeArgs::Optional{Tuple{Int, Type}}) where {NT<:NamedTuple}
+    names = fieldnames(args)
+    types = fieldtypes(args)
+    values = args # It's an iterator over its values
+
+    scalar_types = map(types) do t
+        if t <: Vec
+            eltype(t)
+        else
+            t
+        end
+    end
+    dims = map(types) do t
+        if t <: Vec
+            length(t)
+        else
+            nothing
+        end
+    end
+
+    promoted_type = exists(TypeArgs) ? TypeArgs[2] : promote_type(scalar_types...)
+    promoted_dims::Optional{Int} = exists(TypeArgs) ? TypeArgs[1] : foldl(dims, init=nothing) do pd, d
+        if exists(d) && exists(pd)
+            @bp_check(d == pd,
+                      "Can't coerce different dimensions for this box: ", d, " vs ", pd)
+            return pd
+        elseif exists(d)
+            return d
+        else
+            return pd
+        end
+    end
+    @bp_check(exists(promoted_dims), "Couldn't infer the dimensionality of the box from its parameters!")
+
+    V = Vec{promoted_dims, promoted_type}
+    return (
+        promoted_dims, promoted_type,
+        map(args) do v
+            if v isa Vec
+                convert(V, v)
+            else
+                V(i -> convert(promoted_type, v))
+            end
+        end
+    )
+end
+
+"
 An axis-aligned bounding box of some number of dimensions.
+Stored as its `min` and `size`.
 
 Can be constructed (and deserialized through StructTypes) using almost any pair of properties --
    'min' + 'size'; 'min' + 'max'; 'max' + 'size'; 'center' + 'size', etc.
 Note that 'max' here is inclusive.
+
+It can also be constructed with no arguments (making a size-0 box at the origin),
+   or with a vector range (e.g. `Box(one(v2u):v2u(3, 5))`) which ignores the step size.
 "
 struct Box{N, F} <: AbstractShape{N, F}
     min::Vec{N, F}
     size::Vec{N, F}
+
+    # Basic constructors, with min and size.
+    # If not providing a concrete box type, then at least one of the parameters must be a Vec to infer type.
+    function Box(b_min::Union{F1, Vec{N, F1}}, b_size::Union{F2, Vec{N, F2}}) where {N, F1<:Real, F2<:Real}
+        @bp_check(isa(b_min, Vec) || isa(b_size, Vec),
+                  "Either 'min' or 'size' must be a Vec so the box's dimensions can be inferred!")
+
+        (N2, F, nt) = fix_box_params((min=b_min, size=b_size), nothing)
+        @bp_math_assert(N2 == N,
+                        N, " vs ", N2)
+
+        return new{N, F}(nt.min, nt.size)
+    end
+    function Box{N, F}(b_min::Union{F1, Vec{N, F1}, Vec{1, F1}},
+                       b_size::Union{F2, Vec{N, F2}, Vec{1, F2}}) where {N, F, F1, F2}
+        (_, _, nt) = fix_box_params((min=b_min, size=b_size), (N, F))
+        return new{N, F}(nt.min, nt.size)
+    end
+
+    # Implement 'min' and 'size' named-tuples:
+    @inline function Box(data::Union{NamedTuple{(:min, :size)}, NamedTuple{(:size, :min)}})
+        (N, F, nt) = fix_box_params(data, nothing)
+        return new{N, F}(nt.min, nt.size)
+    end
+    @inline function Box{N, F}(data::Union{NamedTuple{(:min, :size)}, NamedTuple{(:size, :min)}}) where {N, F}
+        (_, _, nt) = fix_box_params(data, (N, F))
+        return new{N, F}(nt.min, nt.size)
+    end
+
+    # Implement 'min' and 'max' (inclusive) named-tuples:
+    @inline function Box(data::Union{NamedTuple{(:min, :max)}, NamedTuple{(:max, :min)}})
+        (N, F, nt) = fix_box_params(data, nothing)
+        return new{N, F}(nt.min, box_typenext(nt.max) - nt.min)
+    end
+    @inline function Box{N, F}(data::Union{NamedTuple{(:min, :max)}, NamedTuple{(:max, :min)}}) where {N, F}
+        (_, _, nt) = fix_box_params(data, (N, F))
+        return new{N, F}(nt.min, box_typenext(nt.max) - nt.min)
+    end
+
+    # Implement 'max' (inclusive) and 'size' named-tuples:
+    @inline function Box(data::Union{NamedTuple{(:max, :size)}, NamedTuple{(:size, :max)}})
+        (N, F, nt) = fix_box_params(data, nothing)
+        return new{N, F}(box_typenext(nt.max) - nt.size, nt.size)
+    end
+    @inline function Box{N, F}(data::Union{NamedTuple{(:max, :size)}, NamedTuple{(:size, :max)}}) where {N, F}
+        (_, _, nt) = fix_box_params(data, nothing)
+        return new{N, F}(box_typenext(nt.max) - nt.size, nt.size)
+    end
+
+    # Implement 'center' and 'size' named-tuples.
+    #
+    # Users can specify whether to use integer division if it shouldn't be inferred from the parameters
+    #   (e.g. you're making a float box but passing integer inputs).
+    # Under integer division, if the size is even,
+    #   the center value is on the max half of the range.
+    @inline function Box(data::Union{NamedTuple{(:center, :size)}, NamedTuple{(:size, :center)}},
+                         division_mode::Optional{@ano_enum(Int, Float)} =
+                           let T = (data.center isa Vec) ? eltype(data.center) : typeof(data.center)
+                             (T <: Integer) ? @ano_value(Int) : @ano_value(Float)
+                           end)
+        (N, F, nt) = fix_box_params(data, nothing)
+        V = Vec{N, F}
+
+        half_size = if division_mode == @ano_value(Int)
+            convert(V, nt.size ÷ convert(F, 2))
+        elseif division_mode == @ano_value(Float)
+            convert(V, nt.size / convert(F, 2))
+        else
+            error("Unhandled division mode: ", val_type(division_mode))
+        end
+
+        return new{N, F}(nt.center - half_size, nt.size)
+    end
+    @inline function Box{N, F}(data::Union{NamedTuple{(:center, :size)}, NamedTuple{(:size, :center)}},
+                               division_mode::Optional{@ano_enum(Int, Float)} =
+                                 (F <: Integer) ? @ano_value(Int) : @ano_value(Float)
+                             ) where {N, F}
+        (_, _, nt) = fix_box_params(data, (N, F))
+        V = Vec{N, F}
+
+        half_size = if division_mode == @ano_value(Int)
+            convert(V, nt.size ÷ convert(F, 2))
+        elseif division_mode == @ano_value(Float)
+            convert(V, nt.size / convert(F, 2))
+        else
+            error("Unhandled division mode: ", val_type(division_mode))
+        end
+
+        return new{N, F}(nt.center - half_size, nt.size)
+    end
+
+    # Forward keyword arguments to the above constructors.
+    # We also need to handle the default constructor here.
+    Box(a...; kw...) = if isempty(kw) && isempty(a)
+        error("Must provide type arguments to a default-constructed box")
+    else
+        Box(values(kw), a...)
+    end
+    Box{N, F}(a...; kw...) where {N, F} = if isempty(kw) && isempty(a)
+        new{N, F}(zero(Vec{N, F}), zero(Vec{N, F}))
+    else
+        Box{N, F}(values(kw), a...)
+    end
+
+    # Construct a Box covering a vector range, ignoring step size.
+    @inline Box(range::VecRange) = Box(min=range.a, max=range.b)
 end
 export Box
 
@@ -166,67 +329,36 @@ end
 #       Constructors       #
 ############################
 
-"Constructs a box, inferring types"
-function Box(min::Vec{N, F1}, size::Vec{N, F2}) where {N, F1, F2}
-    F = promote_type(F1, F2)
-    return Box(convert(Vec{N, F}, min),
-               convert(Vec{N, F}, size))
-end
-
-"Creates a box given a min and size"
-@inline Box(data::Union{NamedTuple{(:min, :size)}, NamedTuple{(:size, :min)}}) =
-    Box(data.min, data.size)
-"Creates a box given a min and *inclusive* max"
-@inline Box(data::Union{NamedTuple{(:min, :max)}, NamedTuple{(:max, :min)}}) = begin
-    (p_min, p_max) = promote(data.min, data.max)
-    Box(p_min, box_typenext(p_max) - p_min)
-end
-"Creates a box given a size and *inclusive* max"
-@inline Box(data::Union{NamedTuple{(:max, :size)}, NamedTuple{(:size, :max)}}) = begin
-    (p_max, p_size) = promote(data.max, data.size)
-    Box(box_typenext(p_max) - p_size, p_size)
-end
-"
-Creates a box given a center and size (and a choice between integer and float division).
-If using integer division and an even size, the center value is put on the max half of the range.
-"
-@inline function Box(data::Union{NamedTuple{(:center, :size)}, NamedTuple{(:size, :center)}},
-                     division_mode::Optional{@ano_enum(Int, Float)})
-    component_type = promote_type(
-        (data.center isa Vec) ? eltype(data.center) : typeof(data.center),
-        (data.size isa Vec) ? eltype(data.size) : typeof(data.size)
-    )
-
-    half_size = if division_mode == @ano_value(Int)
-        convert(typeof(data.size), data.size ÷ convert(component_type, 2))
-    elseif division_mode == @ano_value(Float)
-        convert(typeof(data.size), data.size / convert(component_type, 2))
-    else
-        error("Unhandled division mode: ", val_type(division_mode))
-    end
-
-    return Box(data.center - half_size, data.size)
-end
-@inline function Box(data::Union{NamedTuple{(:center, :size)}, NamedTuple{(:size, :center)}})
-    T = (data.center isa Vec) ? eltype(data.center) : typeof(data.center)
-    division_mode = if T <: Integer
-        @ano_value(Int)
-    else
-        @ano_value(Float)
-    end
-    return Box(data, division_mode)
-end
-@inline Box{N, F}(data::NamedTuple) where {N, F} = convert(Box{N, F}, Box(data))
-@inline Box{N, F}(division_mode::Val, data::NamedTuple) where {N, F} = convert(Box{N, F}, Box(division_mode, data))
-
 # Forward keyword arguments to the above constructors.
-@inline Box(a...; kw...) = Box(namedtuple(keys(kw), values(kw)), a...)
-@inline Box{N, F}(; kw...) where {N, F} = isempty(kw) ?
-                                              Box{N, F}(zero(Vec{N, F}), zero(Vec{N, F})) :
-                                              Box{N, F}(namedtuple(kw))
+# @inline Box(a...; kw...) = Box(namedtuple(keys(kw), values(kw)), a...)
+# @inline Box{N, F}(; kw...) where {N, F} = isempty(kw) ?
+#                                               Box{N, F}(zero(Vec{N, F}), zero(Vec{N, F})) :
+#                                               Box{N, F}(namedtuple(kw))
 
-"Constructs a Box covering the given range. Ignores the step size."
-@inline Box(range::VecRange) = Box(min=range.a, max=range.b)
+# Originally to get a Box{N, F} I just constructed a Box with inferred types then converted it.
+# However the computed size changes for integer vs float values, so that was too simplistic.
+# @inline Box{N, F}(data::NamedTuple) where {N, F} = Box(data, N, F)
+# @inline function Box(data::NamedTuple, N::Int, F::Type)
+#     if F <: Integer
+#         return convert(Box{N, F}, Box(data))
+#     else
+#         # Need to manually convert the paarmeters to float!
+#         data_F = NamedTuple{fieldnames(data)}(
+#             map(fieldnames(data)) do fn::Symbol
+#                 fv = getindex(data, fn)
+#                 if fv isa Vec{N}
+#                     convert(Vec{N, F}, fv)
+#                 elseif fv isa Vec{1}
+#                     convert(F, fv.x)
+#                 else
+#                     convert(F, fv)
+#                 end
+#             end
+#         )
+#         return convert(Box{N, F}, Box(data_F))
+#     end
+# end
+
 
 ##  Boundary  ##
 

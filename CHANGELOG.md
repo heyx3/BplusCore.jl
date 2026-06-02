@@ -1,3 +1,8 @@
+# v0.3.4
+
+* Fix bugs with `Box` constructor overloading
+* Add `iter_join_flatten`
+
 # v0.3.3
 
 * Fix bug with `iter_join` on empty iterators

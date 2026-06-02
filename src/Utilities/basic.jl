@@ -254,7 +254,13 @@ export enumerate_as_pair
 
 "Inserts a delimiter between each element of an iteration"
 iter_join(iterable, delimiter) = isempty(iterable) ? () : drop_last(Iterators.flatten(zip(iterable, Iterators.repeated(delimiter))))
-export iter_join
+"Like `iter_join()` (inserts a delimiter between each element), but also flattens the elements"
+iter_join_flatten(iterable, delimiter) = if isempty(iterable)
+    ()
+else
+    drop_last(Iterators.flatten((a..., delimiter) for a in iterable))
+end
+export iter_join, iter_join_flatten
 
 "A variant of 'reduce()' which skips elements that fail a certain predicate"
 @inline function reduce_some(f::Func, pred::Pred, iter; init=0) where {Func, Pred}

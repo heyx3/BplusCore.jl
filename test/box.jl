@@ -12,6 +12,9 @@
                         Box(Vec(0, 0), Vec(4, 4)))
 @bp_test_no_allocations(Box(@ano_value(Int), center=Vec(2, 2), size=Vec(4, 4)),
                         Box(Vec(0, 0), Vec(4, 4)))
+# Important: float box with integer inputs should not be treated like an int box!
+@bp_test_no_allocations(Box2Df(center=0, size=1),
+                        Box(v2f(-0.5, -0.5), v2f(1.0, 1.0)))
 @bp_test_no_allocations(boundary(Vec(2, 3)),
                         Box(Vec(2, 3), Vec(1, 1)))
 @bp_test_no_allocations(boundary(Vec(5, 9), Vec(0, 0), Vec(120, -5)),
