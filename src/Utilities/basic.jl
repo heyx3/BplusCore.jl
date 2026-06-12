@@ -75,9 +75,6 @@ For example:
 * Read the first 4 bytes of an array-view as a Float32: `f = reinterpret_bytes(@view(my_byte_array[i*4 : end]), Float32)`
 "
 @inline function reinterpret_bytes(source::BytesSource, dest::BytesDestination)
-    # NOTE: I'm keeping some @shout macros in here commented out
-    #    in case this function gives us trouble again.
-
     # Get the source into a pointer-and-count representation.
     if source isa Tuple{Ptr, Integer}
         # Continue past these if statements
@@ -153,7 +150,24 @@ For example:
                    source_byte_count)
     return nothing
 end
-export reinterpret_bytes
+"
+Similar to `reinterpret_bytes`, this bitwisee-copies each element of `src` one at a time into `dest`.
+Useful for collections/tuples with different types per-element.
+
+You can also let it allocate and return its own destination byte-array.
+Also returns the destination array.
+"
+@inline function reinterpret_bytes_slow(src_elements,
+                                        dest::AbstractArray{UInt8} = Vector{UInt8}(undef, sum(sizeof.(src_elements))))
+    offset::Int = 0
+    foreach(src_elements) do e
+        n_bytes = sizeof(e)
+        dest[(offset + 1) : (offset + n_bytes)] .= reinterpret_bytes(e, NTuple{n_bytes, UInt8})
+        offset += n_bytes
+    end
+    return dest
+end
+export reinterpret_bytes, reinterpret_bytes_slow
 
 
 "

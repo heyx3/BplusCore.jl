@@ -219,6 +219,19 @@ end
                                             reinterpret(Float32, 0x98765432),
                                             0xabcdef1234567890)
                         )
+# Test the slow version:
+@bp_test_no_allocations_setup(
+    (v = Vector{UInt8}(undef, 13)),
+    reinterpret_bytes_slow((45, 0xc, -4.5f0), v),
+    UInt8[
+        reinterpret_bytes(45, NTuple{8, UInt8})...,
+        reinterpret_bytes(0xc, UInt8),
+        reinterpret_bytes(-4.5f0, NTuple{4, UInt8})...
+    ]
+)
+let rbs = reinterpret_bytes_slow((0x1, 0x3, 0x2, 0x4, 0xa))
+    @bp_check(rbs == [ 0x1, 0x3, 0x2, 0x4, 0xa ], "Got ", rbs)
+end
 
 # Test ConstVector:
 @bp_check((4.0, 3.0, 1.0, 4.0) isa ConstVector{Float64})

@@ -1,7 +1,9 @@
 # v0.3.4
 
 * Fix bugs with `Box` constructor overloading
-* Add `iter_join_flatten`
+* Add new functions:
+  * `iter_join_flatten`
+  * `reinterpret_bytes_slow`
 
 # v0.3.3
 
