@@ -124,6 +124,7 @@ const TEST_HEADER = quote
                         "    Expected: `", $expected_str, "` => `", expected_value, "`.\n",
                         "      Actual: `", $expr_str,     "` => `", actual_value, "`.\n",
                         "\t", $(msg...))
+                #NOTE: allocation tests disabled until we can use better built-in test features to do this
                 @bp_check(true || result.bytes == 0,
                         "The expression `", $expr_str,
                         "` allocated ", Base.format_bytes(result.bytes),

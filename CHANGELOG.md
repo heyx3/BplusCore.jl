@@ -4,6 +4,7 @@
 * Add new functions:
   * `iter_join_flatten`
   * `reinterpret_bytes_slow`
+* Add `flood_fill` algorithm
 
 # v0.3.3
 

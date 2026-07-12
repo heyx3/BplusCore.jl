@@ -17,6 +17,7 @@ include("up_to.jl")
 
 include("prng.jl")
 include("rand_iterator.jl")
+include("flood_fill.jl")
 
 
 # Precompile common math using PrecompileTools.jl.
