@@ -1,10 +1,11 @@
 # v0.3.4
 
-* Fix bugs with `Box` constructor overloading
+* Add `flood_fill` algorithm
 * Add new functions:
   * `iter_join_flatten`
   * `reinterpret_bytes_slow`
-* Add `flood_fill` algorithm
+* Add `rand` support to enums made with `@bp_enum`
+* Fix bugs with `Box` constructor overloading
 
 # v0.3.3
 

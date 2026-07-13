@@ -162,6 +162,7 @@ function generate_enum(name, definitions, args, is_bitfield::Bool)
             $converter_dispatch
             Base.parse(::Type{$inner_name}, s::AbstractString) = $converter_name(Val(Symbol(s)))
             instances() = $args_tuple
+            $Random.rand(rng::$Random.AbstractRNG, ::Type{$inner_name}) = $Random.rand(instances())
             # Add support for passing an array of enum values into a C function
             #    as if it's an array of the underlying type.
             Base.unsafe_convert(::Type{Ptr{$enum_type}}, r::Ref{$inner_name}) =

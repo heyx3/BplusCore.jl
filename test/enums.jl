@@ -12,6 +12,7 @@
 #    the new enums' values don't overwrite the old.
 
 macro test_enum(E::Symbol, a_val, b_val, c_val)
+    type_name = Symbol("E_", E)
     return quote
         @bp_test_no_allocations($E.a isa $(Symbol(:E_, E)), true)
         @bp_test_no_allocations($E.b isa $(Symbol(:E_, E)), true)
@@ -30,6 +31,11 @@ macro test_enum(E::Symbol, a_val, b_val, c_val)
         @bp_test_no_allocations($E.to_index($E.a), 1)
         @bp_test_no_allocations($E.to_index($E.b), 2)
         @bp_test_no_allocations($E.to_index($E.c), 3)
+
+        const rng = Random.Xoshiro(0xaabbcc)
+        for i in 1:100
+            @bp_test_no_allocations(typeof(rand(rng, $type_name)),  $type_name)
+        end
 
         @bp_check($E.from("a") == $E.a, $E, " from string")
         @bp_check($E.from("b") == $E.b, $E, " from string")
