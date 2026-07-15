@@ -37,9 +37,14 @@ macro test_enum(E::Symbol, a_val, b_val, c_val)
             @bp_test_no_allocations(typeof(rand(rng, $type_name)),  $type_name)
         end
 
-        @bp_check($E.from("a") == $E.a, $E, " from string")
-        @bp_check($E.from("b") == $E.b, $E, " from string")
-        @bp_check($E.from("c") == $E.c, $E, " from string")
+        @bp_test_no_allocations($E.from("a"), $E.a,
+                                $E, " from string")
+        @bp_test_no_allocations($E.from("b"), $E.b,
+                                $E, " from string")
+        @bp_test_no_allocations(parse($type_name, "c"), $E.c,
+                                $E, " from string")
+        @bp_test_no_allocations(tryparse($type_name, "d"), nothing,
+                                $E, " from string")
     end
 end
 

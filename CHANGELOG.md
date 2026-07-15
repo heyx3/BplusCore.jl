@@ -6,6 +6,7 @@
   * `reinterpret_bytes_slow`
 * Add `rand` support to enums made with `@bp_enum`
 * Fix bugs with `Box` constructor overloading
+* Optimize parsing of `@bp_enum`s
 
 # v0.3.3
 

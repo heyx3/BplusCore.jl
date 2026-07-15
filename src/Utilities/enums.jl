@@ -25,7 +25,9 @@ export @ano_enum, @ano_value
 """
 An alternative to the @enum macro, with the following differences:
 * Keeps the enum values in a module to prevent name collisions.
-* Provides an overload of `base.parse()` to parse the enum from a string.
+* Provides an overload of `base.parse()` and `base.tryparse()`, for both `String` and `Symbol`.
+    * To support other string encodings, simply call `MyEnum.enable_parsing_from(fn_str_to_your_encoding)`
+with a lambda that converts from `String` to your own `AbstractString` type.
 * Provides `MyEnum.from(i::Integer)` to convert from int to enum.
 * Provides `MyEnum.from_index(i::Integer)` to get an enum value
     from its index in the original declaration.
@@ -33,6 +35,7 @@ An alternative to the @enum macro, with the following differences:
     in the original declaration.
 * Provides `MyEnum.instances()` to get a tuple of the elements.
 * Provides an alias for the enum type, `E_MyEnum`.
+* Implements `Random.rand(E_MyEnum)`.
 
 If you wish to add definitions inside the enum module (e.x. import a package),
   make your own custom macro that returns `generate_enum()`.
@@ -63,7 +66,6 @@ Along with the usual `@bp_enum` definitions, you also get:
 macro bp_bitflag(name, args...)
     return generate_enum(name, :(begin end), args, true)
 end
-Base.contains
 
 #TODO: Bitflag aggregate values should participate in `parse()`, `to_index()`, `from_index()`.
 
@@ -91,6 +93,7 @@ function generate_enum(name, definitions, args, is_bitfield::Bool)
     #    the @enum inside that module needs to use a different name.
     inner_name = Symbol(enum_name, :_)
     converter_name = :from
+    parse_new_encoder_name = :enable_parsing_from
     index_converter_from_name = :from_index
     index_converter_to_name = :to_index
     alias_name = Symbol(:E_, enum_name)
@@ -111,11 +114,8 @@ function generate_enum(name, definitions, args, is_bitfield::Bool)
         end
     end
 
-    # Generate a set of functions of the form "from(::Val{:abc}) = abc"
-    #   to help with parsing from a string.
-    # Also generate code that puts the elements in a tuple, for easy iteration.
-    # Thirdly, un-escape the arguments so we can pass them into the @enum call.
-    converter_dispatch = Expr(:block)
+    # Generate code that puts the elements in a tuple, for easy iteration.
+    # Un-escape the enum macro's arguments so we can pass them into @enum.
     args_tuple = Expr(:tuple)
     args = map(args) do arg
         while Meta.isexpr(arg, :escape)
@@ -131,11 +131,7 @@ function generate_enum(name, definitions, args, is_bitfield::Bool)
         end
         arg_symbol_expr = :( Symbol($(string(arg_name))) )
 
-        push!(converter_dispatch.args, :(
-            $converter_name(::Val{$arg_symbol_expr}) = $arg_name
-        ))
         push!(args_tuple.args, arg_name)
-
         return Meta.isexpr(arg, :escape) ? arg.args[1] : arg
     end
 
@@ -148,21 +144,35 @@ function generate_enum(name, definitions, args, is_bitfield::Bool)
             $definitions
             $main_macro
             $(bitflag_aggregates...)
+            
+            instances() = $args_tuple
             $converter_name(i::Integer) = $inner_name(i)
-            $converter_name(s::AbstractString) = $converter_name(Val(Symbol(s)))
-            @inline $index_converter_from_name(i::Integer) = instances()[i]
+            
+            $Random.rand(rng::$Random.AbstractRNG, ::Type{$inner_name}) = $Random.rand(instances())
+            $index_converter_from_name(i::Integer) = instances()[i]
             @inline $index_converter_to_name(e::$inner_name) = begin
-                for (key, value) in pairs(instances())
+                # Don't underestimate the speed of linear search!
+                for (i, value) in pairs(instances())
                     if value == e
-                        return key
+                        return i
                     end
                 end
                 return nothing
             end
-            $converter_dispatch
-            Base.parse(::Type{$inner_name}, s::AbstractString) = $converter_name(Val(Symbol(s)))
-            instances() = $args_tuple
-            $Random.rand(rng::$Random.AbstractRNG, ::Type{$inner_name}) = $Random.rand(instances())
+
+            # Set up parsing.
+            const PARSE_LOOKUP = Dict{Union{AbstractString, Symbol}, $inner_name}()
+            for e::$inner_name in instances()
+                PARSE_LOOKUP[Symbol(e)] = e
+                PARSE_LOOKUP[string(e)] = e
+            end
+            $parse_new_encoder_name(encoding_converter) = for e::$inner_name in instances()
+                PARSE_LOOKUP[encoding_converter(string(e))] = e
+            end
+            $converter_name(s::Union{AbstractString, Symbol}) = PARSE_LOOKUP[s]
+            Base.parse(::Type{$inner_name}, s::Union{AbstractString, Symbol}) = $converter_name(s)
+            Base.tryparse(::Type{$inner_name}, s::Union{AbstractString, Symbol}) = get(PARSE_LOOKUP, s, nothing)
+
             # Add support for passing an array of enum values into a C function
             #    as if it's an array of the underlying type.
             Base.unsafe_convert(::Type{Ptr{$enum_type}}, r::Ref{$inner_name}) =
