@@ -1,3 +1,7 @@
+# v0.4.1
+
+* Fix bug in `InteropString` with empty strings
+
 # v0.4.0
 
 * Add `flood_fill` algorithm

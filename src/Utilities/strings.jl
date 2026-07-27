@@ -91,7 +91,7 @@ mutable struct InteropString
 
     function InteropString(s::String, capacity_size_multiple::Int = 3)
         s_bytes = codeunits(s)
-        is = new(s, Vector{UInt8}(undef, length(s_bytes) * capacity_size_multiple))
+        is = new(s, Vector{UInt8}(undef, max(length(s_bytes), 1) * capacity_size_multiple))
 
         copyto!(is.c_buffer, s_bytes)
         is.c_buffer[length(s_bytes) + 1] = 0 # Add a null terminator
