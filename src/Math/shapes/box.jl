@@ -110,9 +110,37 @@ struct Box{N, F} <: AbstractShape{N, F}
         return new{N, F}(box_typenext(nt.max) - nt.size, nt.size)
     end
     @inline function Box{N, F}(data::Union{NamedTuple{(:max, :size)}, NamedTuple{(:size, :max)}}) where {N, F}
-        (_, _, nt) = fix_box_params(data, nothing)
+        (_, _, nt) = fix_box_params(data, (N, F))
         return new{N, F}(box_typenext(nt.max) - nt.size, nt.size)
     end
+
+    # Implement 'min' and 'center' named-tuples.
+    # For integer boxes, the size is always odd.
+    @inline function Box(data::Union{NamedTuple{(:min, :center)}, NamedTuple{(:center, :min)}})
+        (N, F, nt) = fix_box_params(data, nothing)
+        # Note that the inclusive-to-exclusive nudge has to be applied to the max corner,
+        #    not to the size, or it gets rounded away when the box is far from the origin.
+        extent = nt.center - nt.min
+        return new{N, F}(nt.min, box_typenext(nt.center + extent) - nt.min)
+    end
+    @inline function Box{N, F}(data::Union{NamedTuple{(:min, :center)}, NamedTuple{(:center, :min)}}) where {N, F}
+        (_, _, nt) = fix_box_params(data, (N, F))
+        extent = nt.center - nt.min
+        return new{N, F}(nt.min, box_typenext(nt.center + extent) - nt.min)
+    end
+
+    # Implement 'max' (inclusive) and 'center' named-tuples.
+    # For integer boxes, the size is always odd.
+    @inline function Box(data::Union{NamedTuple{(:max, :center)}, NamedTuple{(:center, :max)}})
+        (N, F, nt) = fix_box_params(data, nothing)
+        b_min = nt.center - (nt.max - nt.center)
+        return new{N, F}(b_min, box_typenext(nt.max) - b_min)
+    end
+    @inline function Box{N, F}(data::Union{NamedTuple{(:max, :center)}, NamedTuple{(:center, :max)}}) where {N, F}
+        (_, _, nt) = fix_box_params(data, (N, F))
+        b_min = nt.center - (nt.max - nt.center)
+        return new{N, F}(b_min, box_typenext(nt.max) - b_min)
+     end
 
     # Implement 'center' and 'size' named-tuples.
     #
@@ -251,7 +279,7 @@ export BoxT, Box1D, Box2D, Box3D,
 volume(b::Box) = prod(b.size)
 bounds(b::Box) = b
 center(b::BoxT{F}) where {F} = b.min + (b.size / convert(F, 2))
-center(b::BoxT{I}) where {I<:Integer} = b.min + (b.size ÷ convert(F, 2))
+center(b::BoxT{I}) where {I<:Integer} = b.min + (b.size ÷ convert(I, 2))
 is_touching(box::Box{N, F1}, point::Vec{N, F2}) where {N, F1, F2} = all(
     (point >= min_inclusive(box)) &
     (point < max_exclusive(box))

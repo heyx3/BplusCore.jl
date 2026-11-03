@@ -78,13 +78,13 @@ function generate_enum(name, definitions, args, is_bitfield::Bool)
     process_enum_decl(expr) =
         if expr isa Symbol
             (expr, is_bitfield ? UInt32 : Int32)
-        elseif Meta.isexpr(name, :(::))
-            (name.args[1], name.args[2])
-        elseif Meta.isexpr(name, :escape)
+        elseif Meta.isexpr(expr, :(::))
+            (expr.args[1], expr.args[2])
+        elseif Meta.isexpr(expr, :escape)
             process_enum_decl(expr.args[1])
         else
             error("Unknown type of expression for enum name: ",
-                      name.head, "\n\t", sprint(dump, name))
+                      expr.head, "\n\t", sprint(dump, expr))
         end
     enum_name, enum_type = process_enum_decl(name)
 
@@ -191,8 +191,11 @@ function generate_enum(name, definitions, args, is_bitfield::Bool)
             end)
         end)),
         esc(:(
-            const $alias_name = $enum_name.$inner_name
-        ))
+            Core.@__doc__ const $alias_name = $enum_name.$inner_name
+        )),
+        # If the user wrote a doc-string, attach it to the module too.
+        #    (can't wrap the module itself; `@__doc__` puts it inside a block)
+        esc(:( Core.@__doc__ $enum_name ))
     )
     return output
 end

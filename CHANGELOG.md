@@ -1,6 +1,8 @@
 # v0.4.1
 
+* Add doc-string support to `@bp_enum`, `@bp_biflag`, and `@bp_gl_enum`
 * Fix bug in `InteropString` with empty strings
+* Add support for `min`+`center` and `max`+`center` in construction of `Box`
 
 # v0.4.0
 

@@ -12,7 +12,7 @@ export Capsule
     
 #TODO: rest of AbstractShape interface
 
-# Internal constants for capsule-ray hit detection
+"Internal constants for capsule-ray hit detection"
 @bp_enum CapsuleHitTypes null pA pB body
 
 function intersections( c::Capsule{N, F},

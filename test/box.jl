@@ -8,6 +8,46 @@
                         Box2D{Int}(Vec(3, 4), Vec(4, 10)))
 @bp_test_no_allocations(Box(max=Vec(3, 4), size=Vec(2, 3)),
                         Box(Vec(2, 2), Vec(2, 3)))
+# 'min' + 'center' and 'max' + 'center'.
+# For integer boxes these always produce an odd size, and the two must agree with each other.
+@bp_test_no_allocations(Box(min=Vec(1, 1), center=Vec(3, 4)),
+                        Box(min=Vec(1, 1), max=Vec(5, 7)))
+@bp_test_no_allocations(Box(max=Vec(5, 7), center=Vec(3, 4)),
+                        Box(min=Vec(1, 1), max=Vec(5, 7)))
+@bp_test_no_allocations(Box(min=Vec(-5, 0), center=Vec(0, 0)),
+                        Box(max=Vec(5, 0), center=Vec(0, 0)))
+# A zero-extent integer box still covers its one cell.
+@bp_test_no_allocations(Box(min=Vec(4, 4), center=Vec(4, 4)),
+                        Box(min=Vec(4, 4), size=Vec(1, 1)))
+# The center has to survive a round-trip.
+@bp_test_no_allocations(center(Box(min=Vec(1, 1), center=Vec(3, 4))),
+                        Vec(3, 4))
+@bp_test_no_allocations(center(Box(max=Vec(5, 7), center=Vec(3, 4))),
+                        Vec(3, 4))
+# Float boxes.
+@bp_test_no_allocations(Box(min=v2f(1, 1), center=v2f(3, 4)),
+                        Box(min=v2f(1, 1), max=v2f(5, 7)))
+@bp_test_no_allocations(Box(max=v2f(5, 7), center=v2f(3, 4)),
+                        Box(min=v2f(1, 1), max=v2f(5, 7)))
+# The nudge from an inclusive 'max' to an exclusive one must be applied to the max corner,
+#    not to the size, or it gets rounded away for boxes far from the origin.
+@bp_test_no_allocations(max_inclusive(Box(min=Vec(100.0), center=Vec(100.5))),
+                        Vec(101.0))
+@bp_test_no_allocations(min_inclusive(Box(max=Vec(101.0), center=Vec(100.5))),
+                        Vec(100.0))
+@bp_test_no_allocations(max_inclusive(Box(min=Vec(1e6), center=Vec(1e6 + 0.5))),
+                        Vec(1e6 + 1.0))
+@bp_test_no_allocations(center(Box(min=Vec(100.0), center=Vec(100.5))),
+                        Vec(100.5))
+# Explicitly-typed versions, including with scalar inputs.
+@bp_test_no_allocations(Box{2, Float32}(min=Vec(1, 1), center=Vec(3, 4)),
+                        Box2Df(min=Vec(1, 1), max=Vec(5, 7)))
+@bp_test_no_allocations(Box{2, Float32}(max=Vec(5, 7), center=Vec(3, 4)),
+                        Box2Df(min=Vec(1, 1), max=Vec(5, 7)))
+@bp_test_no_allocations(Box2Df(min=1, center=3),
+                        Box2Df(min=1, max=5))
+@bp_test_no_allocations(Box2Df(max=5, center=3),
+                        Box2Df(min=1, max=5))
 @bp_test_no_allocations(Box(@ano_value(Float), center=Vec(2, 2), size=Vec(4, 4)),
                         Box(Vec(0, 0), Vec(4, 4)))
 @bp_test_no_allocations(Box(@ano_value(Int), center=Vec(2, 2), size=Vec(4, 4)),
@@ -155,6 +195,12 @@
                         Interval(min=5, size=6))
 @bp_test_no_allocations(Interval{Float64}(min=5, max=10),
                         Interval{Float64}(min=5, size=6))
+@bp_test_no_allocations(Interval(min=1, center=3),
+                        Interval(min=1, max=5))
+@bp_test_no_allocations(Interval(max=5, center=3),
+                        Interval(min=1, max=5))
+@bp_test_no_allocations(Interval{Float64}(min=1, center=3),
+                        Interval{Float64}(min=1, max=5))
 @bp_test_no_allocations(Interval(@ano_value(Int), center=2, size=4),
                         Interval{Int}(min=0, max=3))
 @bp_test_no_allocations(Interval(@ano_value(Int), center=2, size=5),

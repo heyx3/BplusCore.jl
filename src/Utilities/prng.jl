@@ -300,7 +300,7 @@ function Random.rand(r::ConstPRNG, ::Type{UInt8})
 end
 
 # For floats, keep a constant sign/exponent and randomize the other bits
-#    to get a uniform-random value between 1 and 2.
+#    to get a uniform-random value between 1 (inclusive) and 2 (exclusive).
 function Random.rand(r::ConstPRNG, ::Type{Float16})
     (u, r) = rand(r, UInt16)
     value = -1 + reinterpret(Float16,
@@ -339,6 +339,7 @@ end
 # Re-implement some built-in rand() functions that are very useful.
 
 function Random.rand(rng::ConstPRNG, sp::Random.SamplerRangeNDL{U,T}) where {U,T}
+    # Taken from Julia Random; apparently this is "nearly divisionless" algo by Daniel Lemire
     s = sp.s
     (_x, rng) = rand(rng, U)
     x = widen(_x)
@@ -353,7 +354,7 @@ function Random.rand(rng::ConstPRNG, sp::Random.SamplerRangeNDL{U,T}) where {U,T
             l = m % U
         end
     end
-    
+
     result = (s == 0 ? x : m >> (8*sizeof(U))) % T + sp.a
     return (result, rng)
 end
